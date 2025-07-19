@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Link Test - DEVScan</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            line-height: 2;
+            font-size: 16px;
+        }
+        .test-links {
+            margin: 20px 0;
+        }
+        .test-links a {
+            display: block;
+            margin: 10px 0;
+            color: blue;
+        }
+    </style>
+</head>
+<body>
+    <h1>Simple Link Test for DEVScan</h1>
+    <p><strong>Instructions:</strong> These external links should get green underlines when the extension is working.</p>
+    
+    <div class="test-links">
+        <h2>External Links (should be underlined):</h2>
+        <a href="https://example.com">Example.com - Simple Test Link</a>
+        <a href="https://github.com">GitHub - Code Repository</a>
+        <a href="https://stackoverflow.com">Stack Overflow - Q&A Site</a>
+        <a href="https://microsoft.com">Microsoft - Tech Company</a>
+        <a href="https://apple.com">Apple - Tech Company</a>
+    </div>
+
+    <div class="test-links">
+        <h2>Text URLs (should be converted to underlined spans):</h2>
+        <p>Plain URL: https://www.google.com</p>
+        <p>WWW format: www.reddit.com</p>
+        <p>Another URL: https://news.ycombinator.com</p>
+    </div>
+
+    <div class="test-links">
+        <h2>Internal Links (should NOT be underlined):</h2>
+        <a href="#test">Internal anchor link</a>
+        <a href="/relative-page.html">Relative link</a>
+    </div>
+
+    <script>
+        // Debug information
+        console.log("Test page loaded");
+        console.log("Current domain:", window.location.hostname);
+        
+        // Wait a bit then check for styling
+        setTimeout(() => {
+            const links = document.querySelectorAll('a[href]');
+            console.log("Found", links.length, "links on test page");
+            
+            let styledCount = 0;
+            links.forEach((link, index) => {
+                const hasUnderline = link.style.textDecoration === 'underline';
+                if (hasUnderline) styledCount++;
+                
+                console.log(`Link ${index + 1}:`, {
+                    text: link.textContent.trim(),
+                    href: link.href,
+                    styled: hasUnderline,
+                    textDecoration: link.style.textDecoration,
+                    color: link.style.textDecorationColor
+                });
+            });
+            
+            console.log(`${styledCount} of ${links.length} links have been styled`);
+            
+            if (styledCount === 0) {
+                console.error("No links were styled - extension may not be working");
+            } else {
+                console.log("Extension appears to be working");
+            }
+        }, 3000);
+    </script>
+</body>
+</html>

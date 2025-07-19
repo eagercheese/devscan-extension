@@ -1,0 +1,42 @@
+# Chrome Extension
+*.pem
+*.crx
+*.zip
+
+# Development files
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Node modules (if any)
+node_modules/
+
+# Environment files
+.env
+.env.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# IDE files
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store?
+ehthumbs.db
+Icon?
