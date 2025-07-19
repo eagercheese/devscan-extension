@@ -26,3 +26,4 @@ document.addEventListener("DOMContentLoaded", () => {
     chrome.storage.sync.set({ logDetection: toggleLog.checked });
   });
 });
+

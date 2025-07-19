@@ -129,7 +129,7 @@
       return;
     }
 
-    console.log("🔧 Scanning page for external links...");
+    console.log("Scanning page for external links...");
     scanPage();
 
     // Watch for dynamic content

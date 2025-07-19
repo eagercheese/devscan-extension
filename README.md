@@ -51,3 +51,4 @@ Open `simple-test.html` in Chrome to test the extension functionality.
 ## Backend Integration
 
 The extension sends external URLs to `http://localhost:3000/api/scan-links/scan-link` for security analysis.
+
