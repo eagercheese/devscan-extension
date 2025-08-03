@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="../css/popup.css" />
+    <title>DEVSCAN Settings</title>
+  </head>
+  <body>
+    <div class="card">
+      <h1>
+        <img src="" alt="DevScan Logo" class="logo" />
+        DEVSCAN
+      </h1>
+    </div>
+
+    <div class="toggle-row">
+      <span>Enable Page Blocking</span>
+      <input type="checkbox" id="toggleBlock" />
+    </div>
+    <div class="toggle-row">
+      <span>Enable Link Highlights </span>
+      <input type="checkbox" id="toggleWarning" />
+    </div>
+    
+    <div class="server-config">
+      <div class="server-row">
+        <label for="serverUrl">DEVScan Server URL:</label>
+        <input type="text" id="serverUrl" placeholder="http://localhost:3000" />
+        <button id="saveServer">Save</button>
+      </div>
+      <div class="server-help">
+        <small>Enter the URL of your DEVScan analysis server</small>
+      </div>
+    </div>
+
+    <div class="quote">
+      “Stay secure. Stay aware. Stay ahead.”<br />
+      -Rjay Manaloto-
+    </div>
+    <div class="footer">
+      Message us for Inquiries!<br />
+      <a href="https://www.devscan.com" style="color: #fff">www.DEVscan.com</a>
+    </div>
+
+    <script src="../js/popup.js"></script>
+  </body>
+</html>

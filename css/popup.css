@@ -1,0 +1,132 @@
+body {
+  font-family: "Segoe UI", sans-serif;
+  margin: 0;
+  padding: 20px;
+  background: linear-gradient(to bottom, #79b4e3, #0f3057);
+  color: #fff;
+  width: 300px;
+  box-sizing: border-box;
+}
+
+.card {
+  background: #ffffff;
+  color: #222;
+  border-radius: 12px;
+  padding: 15px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+  text-align: center;
+  margin-bottom: 15px;
+}
+
+.logo {
+  width: 40px;
+  vertical-align: middle;
+  margin-right: 10px;
+}
+
+h1 {
+  font-size: 20px;
+  margin: 0;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f0f0f0;
+  border-radius: 8px;
+  padding: 10px;
+  margin: 8px 0;
+  color: #222;
+}
+
+.footer {
+  text-align: center;
+  font-size: 11px;
+  margin-top: 12px;
+}
+
+.quote {
+  background: #ffffff;
+  border-radius: 8px;
+  color: #333;
+  font-size: 12px;
+  padding: 10px;
+  margin-top: 10px;
+}
+
+input[type="checkbox"] {
+  width: 40px;
+  height: 20px;
+  appearance: none;
+  background: #999;
+  border-radius: 20px;
+  position: relative;
+  outline: none;
+  cursor: pointer;
+}
+
+input[type="checkbox"]:checked {
+  background: #3b82f6;
+}
+
+input[type="checkbox"]::before {
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  border-radius: 50%;
+  top: 2px;
+  left: 2px;
+  transition: 0.25s;
+}
+
+input[type="checkbox"]:checked::before {
+  transform: translateX(20px);
+}
+
+.server-config {
+  background: #f0f0f0;
+  border-radius: 8px;
+  padding: 12px;
+  margin: 8px 0;
+  color: #222;
+}
+
+.server-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.server-row label {
+  font-size: 12px;
+  font-weight: bold;
+  color: #333;
+}
+
+.server-row input[type="text"] {
+  padding: 6px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 11px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.server-row button {
+  padding: 6px 12px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  align-self: flex-end;
+  width: 60px;
+}
+
+.server-row button:hover {
+  background: #2563eb;
+}
