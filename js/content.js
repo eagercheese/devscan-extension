@@ -108,29 +108,33 @@ function processLink(link) {
 // ==============================
 
 // Collect links for analysis and manage batching to server
-function collectLinkForAnalysis(url) {
-  if (isSameDomain(url, window.location.href)) return;
+function collectLinkForAnalysis(rawUrl) {
+  try {
+    const decodedUrl = decodeURIComponent(rawUrl);
+    
+    if (isSameDomain(decodedUrl, window.location.href)) return;
 
-  // Only collect links that haven't been processed yet (prevents duplicates)
-  if (!collectedLinks.has(url) && !processedLinks.has(url)) {
-    collectedLinks.add(url);
+    if (!collectedLinks.has(decodedUrl) && !processedLinks.has(decodedUrl)) {
+      collectedLinks.add(decodedUrl);
 
-    console.log("[DEVScan] Acquired link:", url);
-    // Reset batch timeout when new links are added
-    if (batchTimeout) clearTimeout(batchTimeout);
+      console.log("[DEVScan] Acquired link:", decodedUrl);
+      
+      if (batchTimeout) clearTimeout(batchTimeout);
 
-    // Schedule batch sending after delay
-    batchTimeout = setTimeout(() => {
-      sendLinkBatch();
-    }, BATCH_DELAY);
+      batchTimeout = setTimeout(() => {
+        sendLinkBatch();
+      }, BATCH_DELAY);
 
-    // Send immediately if batch is full
-    if (collectedLinks.size >= BATCH_SIZE) {
-      clearTimeout(batchTimeout);
-      sendLinkBatch();
+      if (collectedLinks.size >= BATCH_SIZE) {
+        clearTimeout(batchTimeout);
+        sendLinkBatch();
+      }
     }
+  } catch (e) {
+    console.warn("[DEVScan] Failed to decode URL:", rawUrl, e);
   }
 }
+
 
 // Check if two URLs belong to the same domain
 function isSameDomain(url1, url2) {
@@ -222,8 +226,6 @@ function updateLinkTooltip(url, verdict) {
 
 
 function scanLinks() {
-
-
   const links = document.querySelectorAll(selectors.join(","));
   links.forEach(processLink); 
 }
