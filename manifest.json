@@ -4,7 +4,7 @@
   "version": "4.0",
   "description": "DEVScan: Real-time link scanner with tooltips and warning redirection.",
 
-  "permissions": ["storage", "tabs", "scripting", "activeTab"],
+  "permissions": ["webRequest", "storage", "tabs", "scripting", "activeTab"],
 
   "host_permissions": ["<all_urls>"],
 

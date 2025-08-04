@@ -34,40 +34,30 @@ chrome.storage.sync.get(['currentSessionId'], (result) => {
 // GLOBAL STATE MANAGEMENT
 // ==============================
 
-let collectedLinks = new Set();     // Links waiting to be sent to server
-let processedLinks = new Set();     // Links already sent to server (prevents duplicates)
-let linkVerdicts = new Map();       // Server verdicts cached locally
-const BATCH_SIZE = 50;              // Maximum links per batch request
-const BATCH_DELAY = 2500;           // 2.5 seconds delay before sending batch
-let batchTimeout = null;            // Timeout handle for batch sending
-let currentSessionId = null;        // Current scan session ID
-
-const selectors = [
-    "a[href]",
-    "link[href]",
-    "iframe[src]",
-    "frame[src]",
-    "script[src]",
-    "form[action]",
-    "button[onclick]",
-    "[onclick*='http']",
-    "[data-href]"
-  ];
+// Link collection and server communication
+let collectedLinks = new Set();           // Links waiting to be sent to server
+let processedLinks = new Set();           // Links already sent to server (prevents duplicates)
+let linkVerdicts = new Map();             // Server verdicts cached locally
+const BATCH_SIZE = 50;                    // Maximum links per batch request
+const BATCH_DELAY = 5000;                 // 5 seconds delay before sending batch
+let batchTimeout = null;                  // Timeout handle for batch sending
+let currentSessionId = null;              // Current scan session ID
 
 // ==============================
 // LINK PROCESSING ENGINE
 // ==============================
+
 // Main function to process individual links found on the page
 function processLink(link) {
-  
-
   if (!link || !link.href) return;
 
-  const isInternal = isSameDomain(link.href, window.location.href); // Check if it's an internal link first
+  // Check if it's an internal link first
+  const isInternal = isSameDomain(link.href, window.location.href);
 
-  if (isInternal) 
-    return; // Skip processing internal links completely - no tooltips, no underlining, no scanning
-
+  if (isInternal) {
+    // Skip processing internal links completely - no tooltips, no underlining, no scanning
+    return;
+  }
 
   // ==============================
   // EXTERNAL LINK PROCESSING
@@ -78,19 +68,23 @@ function processLink(link) {
     link.removeEventListener("click", link.__devscanHandlerAttached);
   }
 
-  collectLinkForAnalysis(link.href); // Add external link to collection for server processing
+  // Add external link to collection for server processing
+  collectLinkForAnalysis(link.href);
 
   // Use server verdict if available, otherwise fall back to local risk assessment
   const riskLevel = linkVerdicts.get(link.href) || determineRisk(link.href);
-  attachRiskTooltip(link, riskLevel);
-  link.dataset.devscanRisk = riskLevel; // Store the determined risk on the element for click handling
+  attachRiskTooltip(link, riskLevel); // Reattach tooltip every time
 
-   // Create click handler that ALWAYS opens warning page for risky links
+  // Store the determined risk on the element for click handling
+  link.dataset.devscanRisk = riskLevel;
+
+  // Create click handler that ALWAYS opens warning page for risky links
   const clickHandler = (e) => {
     const storedRisk = link.dataset.devscanRisk || "unknown";
     if (["danger", "warning", "malicious", "anomalous"].includes(storedRisk)) {
       e.preventDefault();
       e.stopPropagation();
+
       chrome.runtime.sendMessage({
         action: "openWarningTab",
         targetUrl: link.href,
@@ -115,7 +109,6 @@ function collectLinkForAnalysis(url) {
   if (!collectedLinks.has(url) && !processedLinks.has(url)) {
     collectedLinks.add(url);
 
-    console.log("[DEVScan] Acquired link:", url);
     // Reset batch timeout when new links are added
     if (batchTimeout) clearTimeout(batchTimeout);
 
@@ -150,7 +143,9 @@ function sendLinkBatch() {
 
   const linksArray = Array.from(collectedLinks);
   const currentDomain = window.location.hostname;
-  linksArray.forEach(url => processedLinks.add(url)); // Mark all links as processed to avoid re-sending
+
+  // Mark all links as processed to avoid re-sending
+  linksArray.forEach(url => processedLinks.add(url));
 
   chrome.runtime.sendMessage(
     {
@@ -162,7 +157,7 @@ function sendLinkBatch() {
     (response) => {
       if (chrome.runtime.lastError) {
         console.error("[DEVScan] Extension error:", chrome.runtime.lastError);
-         // Remove from processed set if sending failed, so they can be retried
+        // Remove from processed set if sending failed, so they can be retried
         linksArray.forEach((url) => {
           processedLinks.delete(url);
           if (!linkVerdicts.has(url)) {
@@ -176,13 +171,12 @@ function sendLinkBatch() {
 
       if (response && response.success) {
         collectedLinks.clear();
-
         // Update session ID if provided by server
-        if (response.sessionId) { 
+        if (response.sessionId) {
           currentSessionId = response.sessionId;
         }
-
-        // Update local verdicts cache with server results
+        
+        
         for (const [url, verdict] of Object.entries(response.verdicts || {})) {
           linkVerdicts.set(url, verdict);
           updateLinkTooltip(url, verdict);
@@ -203,7 +197,6 @@ function sendLinkBatch() {
   );
 }
 
-// Update tooltip display for a specific URL with new verdict
 function updateLinkTooltip(url, verdict) {
   const links = document.querySelectorAll(`a[href="${url}"]`);
   links.forEach((link) => {
@@ -214,56 +207,16 @@ function updateLinkTooltip(url, verdict) {
   });
 }
 
-
-
 // ==============================
-// PAGE SCANNING & EARLY DOM OBSERVATION
+// PAGE SCANNING & EVENT HANDLING
 // ==============================
 
-
+// Scan all links on the current page
 function scanLinks() {
+  const links = document.querySelectorAll("a[href]");
+  links.forEach(processLink);
 
-
-  const links = document.querySelectorAll(selectors.join(","));
-  links.forEach(processLink); 
 }
-
-function earlyScanObserver() {
-  const seen = new Set();
-
-  const observer = new MutationObserver(mutations => {
-    mutations.forEach(m => {
-      m.addedNodes.forEach(n => {
-        if (n.nodeType === 1) {
-          // If node matches any selector, process directly
-          if (n.matches && selectors.some(sel => n.matches(sel))) {
-            processLink(n);
-          }
-
-          // Also scan all matching children
-          if (n.querySelectorAll) {
-            const matches = n.querySelectorAll(selectors.join(","));
-            matches.forEach(link => {
-              processLink(link);
-            });
-          }
-        }
-      });
-    });
-  });
-
-  observer.observe(document.documentElement, {
-    childList: true,
-    subtree: true
-  });
-
-  // Initial scan
-  document.querySelectorAll(selectors.join(",")).forEach(link => {
-    processLink(link);
-  });
-}
-
-earlyScanObserver();
 
 // ==============================
 // MESSAGE HANDLING
@@ -338,7 +291,7 @@ setInterval(() => {
 chrome.storage.onChanged.addListener((changes) => {
   if (changes.showWarningsOnly) {
     const highlightEnabled = changes.showWarningsOnly.newValue;
-    document.querySelectorAll(selectors).forEach((link) => {
+    document.querySelectorAll("a[href]").forEach((link) => {
       if (isSameDomain(link.href, window.location.href)) return;
 
       if (highlightEnabled) {
@@ -385,7 +338,7 @@ const observer = new MutationObserver((mutations) => {
           
           // Check if the node contains any links
           if (node.querySelectorAll) {
-            const newLinks = node.querySelectorAll(selectors);
+            const newLinks = node.querySelectorAll("a[href]");
             if (newLinks.length > 0) {
               hasNewLinks = true;
               return;

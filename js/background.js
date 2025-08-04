@@ -18,6 +18,8 @@ chrome.runtime.onInstalled.addListener(() => {
     suppressReminder: false, // Ensure this is initialized
     serverUrl: "http://localhost:3000", // Default server URL
     currentSessionId: null, // Track current session
+
+
   });
 });
 
@@ -271,3 +273,35 @@ chrome.runtime.onMessage.addListener((message, sender) => {
     });
   }
 });
+
+// ======================================================
+// REDIRECT / MANUALLY INPUTED LINK INTERCEPTOR
+// ======================================================
+
+function interceptURL(url, details) {
+  console.log("Intercepted:", url);
+
+
+  /* -------------------------------------------------
+   * Example ideas (commented out for now):
+   *
+   * // Just analyse:
+   * scanUrlWithYourModel(url).then(result => {
+   *   console.log(result);
+   * });
+   *
+   * // If, in the future, you regain "blocking":
+   * //   return { cancel: true }           // to block
+   * //   return { redirectUrl: "https://..." } // to redirect
+   * ------------------------------------------------- */
+}
+
+chrome.webRequest.onBeforeRequest.addListener(
+  (details) => {
+    interceptURL(details.url, details);
+
+    // observe-only: return nothing
+  },
+   { urls: ["<all_urls>"], types: ["main_frame"] },               // listener filter
+  // no "blocking" extraInfoSpec here
+);
