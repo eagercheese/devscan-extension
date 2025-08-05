@@ -11,9 +11,15 @@ document.getElementById("proceed-btn").onclick = () => {
 
 document.getElementById("back-btn").onclick = () => {
   if (chrome.runtime && chrome.tabs && !isNaN(openerTabId)) {
-    // Ask background to close this tab and switch focus back
-    chrome.runtime.sendMessage({ action: "closeAndSwitchBack", openerTabId });
+    chrome.runtime.sendMessage({ action: "closeAndSwitchBack", openerTabId }, (response) => {
+      if (chrome.runtime.lastError || response?.success === false) {
+        // Could not switch back — fallback to Google
+        window.location.href = "https://www.google.com";
+      }
+    });
   } else {
-    window.close(); // fallback
+    // fallback: either no openerTabId or tabs API not available
+    window.location.href = "https://www.google.com";
   }
 };
+

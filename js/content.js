@@ -276,16 +276,20 @@ chrome.runtime.onMessage.addListener((msg) => {
   if (msg.action === "showToast") {
     showToast(msg.message, msg.type);
   } else if (msg.action === "updateLinkVerdicts") {
-    // Update local verdicts cache with server results
     const { verdicts } = msg;
     for (const [url, verdict] of Object.entries(verdicts)) {
       linkVerdicts.set(url, verdict);
       updateLinkTooltip(url, verdict);
     }
   } else if (msg.action === "sessionUpdated") {
-    // Update session ID when it changes
     currentSessionId = msg.sessionId;
     console.log("[DEVScan] Session updated:", currentSessionId);
+  } else if (msg.action === "redirectToWarningPage") {
+    const warningUrl = chrome.runtime.getURL(
+      `html/WarningPage.html?url=${encodeURIComponent(msg.targetUrl)}&openerTabId=${msg.openerTabId}`
+    );
+    console.log("[DEVScan] Redirecting to warning page:", warningUrl);
+    window.location.replace(warningUrl);
   }
 });
 

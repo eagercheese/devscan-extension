@@ -191,7 +191,12 @@ async function handleServerAnalysis(links, domain, providedSessionId, tabId) {
         });
       }
       
-      console.log(`[DEVScan Background] Processed ${result.processed} link verdicts`);
+      // show the verdict in the background.js console - monitoring
+      console.log(`[DEVScan Background] Processed ${result.processed} link verdicts:`);
+      for (const [url, verdict] of Object.entries(result.verdicts)) {
+        console.log(`  - ${url} → ${verdict}`);
+}
+
       return { 
         verdicts: result.verdicts, 
         sessionId: result.session_ID || sessionId 
@@ -278,22 +283,54 @@ chrome.runtime.onMessage.addListener((message, sender) => {
 // REDIRECT / MANUALLY INPUTED LINK INTERCEPTOR
 // ======================================================
 
+// function interceptURL(url, details) {
+//   console.log("[DEVScan Intercepted] URL:", url);
+
+//   const decodedUrl = decodeURIComponent(url);
+
+//   // Extract domain from URL
+//   let domain = "unknown";
+//   try {
+//     domain = new URL(decodedUrl).hostname;
+//   } catch (err) {
+//     console.warn("Invalid intercepted URL:", decodedUrl);
+//   }
+
+//   chrome.storage.sync.get("currentSessionId", ({ currentSessionId }) => {
+//     handleServerAnalysis([decodedUrl], domain, currentSessionId, details.tabId);
+//   });
+// }
+
 function interceptURL(url, details) {
-  console.log("Intercepted:", url);
+  console.log("[DEVScan Intercepted] URL:", url);
+
+  const decodedUrl = decodeURIComponent(url);
+
+  let domain = "unknown";
+  try {
+    domain = new URL(decodedUrl).hostname;
+  } catch (err) {
+    console.warn("Invalid intercepted URL:", decodedUrl);
+  }
+
+  chrome.storage.sync.get("currentSessionId", ({ currentSessionId }) => {
+    handleServerAnalysis([decodedUrl], domain, currentSessionId, details.tabId).then((result) => {
+      const verdict = result.verdicts[decodedUrl];
+
+      if (verdict === "malicious") {
+      chrome.tabs.sendMessage(details.tabId, {
+        action: "redirectToWarningPage",
+        targetUrl: decodedUrl,
+        openerTabId: details.tabId
+      });
+}
 
 
-  /* -------------------------------------------------
-   * Example ideas (commented out for now):
-   *
-   * // Just analyse:
-   * scanUrlWithYourModel(url).then(result => {
-   *   console.log(result);
-   * });
-   *
-   * // If, in the future, you regain "blocking":
-   * //   return { cancel: true }           // to block
-   * //   return { redirectUrl: "https://..." } // to redirect
-   * ------------------------------------------------- */
+
+    }).catch((err) => {
+      console.error("[DEVScan Intercepted] Analysis failed:", err);
+    });
+  });
 }
 
 chrome.webRequest.onBeforeRequest.addListener(
