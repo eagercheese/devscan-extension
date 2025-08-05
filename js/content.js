@@ -14,6 +14,15 @@
 // Initialize settings from extension storage
 watchBlockingSetting();
 
+// Detect if this is a page refresh or new navigation
+const navigationEntry = performance.getEntriesByType('navigation')[0];
+if (navigationEntry && navigationEntry.type === 'reload') {
+  pageRefreshDetected = true;
+  console.log('[DEVScan] Page refresh detected');
+} else {
+  console.log('[DEVScan] New page navigation detected');
+}
+
 // Get current session ID from storage or create new one
 chrome.storage.sync.get(['currentSessionId'], (result) => {
   if (result.currentSessionId) {
@@ -41,6 +50,14 @@ const BATCH_SIZE = 50;              // Maximum links per batch request
 const BATCH_DELAY = 2500;           // 2.5 seconds delay before sending batch
 let batchTimeout = null;            // Timeout handle for batch sending
 let currentSessionId = null;        // Current scan session ID
+
+// ==============================
+// PAGE-BASED SCANNING STATE
+// ==============================
+let currentPageUrl = window.location.href;        // Track current page URL
+let pageProcessedLinks = new Set();               // Links processed for current page
+let pageRefreshDetected = false;                  // Track if page was refreshed
+let pageLoadTime = Date.now();                    // Track when page loaded
 
 const selectors = [
     "a[href]",
@@ -114,7 +131,8 @@ function collectLinkForAnalysis(rawUrl) {
     
     if (isSameDomain(decodedUrl, window.location.href)) return;
 
-    if (!collectedLinks.has(decodedUrl) && !processedLinks.has(decodedUrl)) {
+    // Check if this link was already processed for current page
+    if (!collectedLinks.has(decodedUrl) && !pageProcessedLinks.has(decodedUrl)) {
       collectedLinks.add(decodedUrl);
 
       console.log("[DEVScan] Acquired link:", decodedUrl);
@@ -154,21 +172,25 @@ function sendLinkBatch() {
 
   const linksArray = Array.from(collectedLinks);
   const currentDomain = window.location.hostname;
-  linksArray.forEach(url => processedLinks.add(url)); // Mark all links as processed to avoid re-sending
+  
+  // Mark links as processed for current page
+  linksArray.forEach(url => pageProcessedLinks.add(url));
 
   chrome.runtime.sendMessage(
     {
       action: "sendLinksToServer",
       links: linksArray,
       domain: currentDomain,
-      sessionId: currentSessionId
+      sessionId: currentSessionId,
+      pageUrl: currentPageUrl,
+      pageRefreshed: pageRefreshDetected
     },
     (response) => {
       if (chrome.runtime.lastError) {
         console.error("[DEVScan] Extension error:", chrome.runtime.lastError);
          // Remove from processed set if sending failed, so they can be retried
         linksArray.forEach((url) => {
-          processedLinks.delete(url);
+          pageProcessedLinks.delete(url);
           if (!linkVerdicts.has(url)) {
             linkVerdicts.set(url, "failed");
             updateLinkTooltip(url, "failed");
@@ -180,6 +202,7 @@ function sendLinkBatch() {
 
       if (response && response.success) {
         collectedLinks.clear();
+        pageRefreshDetected = false; // Reset refresh flag after successful send
 
         // Update session ID if provided by server
         if (response.sessionId) { 
@@ -194,7 +217,7 @@ function sendLinkBatch() {
       } else {
         // Remove from processed set if server processing failed
         linksArray.forEach((url) => {
-          processedLinks.delete(url);
+          pageProcessedLinks.delete(url);
           if (!linkVerdicts.has(url)) {
             const localVerdict = determineRisk(url);
             linkVerdicts.set(url, localVerdict);
@@ -308,6 +331,25 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // ==============================
+// PAGE REFRESH DETECTION
+// ==============================
+
+// Detect when user is about to refresh or navigate away
+window.addEventListener('beforeunload', () => {
+  // Store that user initiated refresh/navigation
+  sessionStorage.setItem('devscan_page_refresh', 'true');
+});
+
+// Check if we returned from a refresh
+window.addEventListener('load', () => {
+  if (sessionStorage.getItem('devscan_page_refresh') === 'true') {
+    pageRefreshDetected = true;
+    sessionStorage.removeItem('devscan_page_refresh');
+    console.log('[DEVScan] Page refresh detected via beforeunload');
+  }
+});
+
+// ==============================
 // MEMORY MANAGEMENT
 // ==============================
 
@@ -321,20 +363,20 @@ setInterval(() => {
     entries.slice(-500).forEach(([url, verdict]) => {
       linkVerdicts.set(url, verdict);
     });
-    console.log("[DEVScan] Cleaned up link verdicts cache");
+    console.log("[DEVScan] Cleaned up verdicts cache, kept 500 most recent");
   }
   
-  // Clear old processed links if we have too many (keep last 2000)
-  if (processedLinks.size > 2000) {
-    const entries = Array.from(processedLinks);
-    processedLinks.clear();
-    // Keep only the last 1000 entries
-    entries.slice(-1000).forEach(url => {
-      processedLinks.add(url);
+  // Clear page processed links if we have too many (keep last 500)
+  if (pageProcessedLinks.size > 500) {
+    const linksArray = Array.from(pageProcessedLinks);
+    pageProcessedLinks.clear();
+    // Keep only the last 250 links
+    linksArray.slice(-250).forEach(url => {
+      pageProcessedLinks.add(url);
     });
-    console.log("[DEVScan] Cleaned up processed links cache");
+    console.log("[DEVScan] Cleaned up page processed links cache, kept 250 most recent");
   }
-}, 5 * 60 * 1000); // Every 5 minutes
+}, 30000); // Run every 30 seconds
 
 // ==============================
 // SETTINGS CHANGE HANDLING
@@ -448,16 +490,31 @@ window.addEventListener("scroll", () => {
 let lastUrl = window.location.href;
 const urlObserver = new MutationObserver(() => {
   if (window.location.href !== lastUrl) {
+    const previousUrl = lastUrl;
     lastUrl = window.location.href;
-    console.log("[DEVScan] URL changed, clearing processed links and rescanning...");
     
-    // Clear processed links for new page but keep verdicts cache for performance
-    processedLinks.clear();
+    console.log("[DEVScan] URL changed from", previousUrl, "to", lastUrl);
     
-    // Rescan after a short delay to allow page to load
-    setTimeout(() => {
-      scanLinks();
-    }, 1000);
+    // Update page tracking
+    currentPageUrl = lastUrl;
+    pageLoadTime = Date.now();
+    
+    // Only clear processed links if it's a different page (not just hash changes)
+    const previousUrlBase = previousUrl.split('#')[0];
+    const currentUrlBase = lastUrl.split('#')[0];
+    
+    if (previousUrlBase !== currentUrlBase) {
+      console.log("[DEVScan] New page detected, clearing processed links and rescanning...");
+      pageProcessedLinks.clear();
+      pageRefreshDetected = false; // SPA navigation, not a refresh
+      
+      // Rescan after a short delay to allow page to load
+      setTimeout(() => {
+        scanLinks();
+      }, 1000);
+    } else {
+      console.log("[DEVScan] Hash change detected, no rescan needed");
+    }
   }
 });
 
