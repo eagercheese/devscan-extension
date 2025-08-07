@@ -74,6 +74,7 @@ const iconUrls = {
       box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
       font-family: 'Open Sans', sans-serif;
       font-size: 14px;
+      text-align: justify;
       overflow: hidden;
       pointer-events: none;
     }
@@ -110,22 +111,39 @@ const iconUrls = {
       min-height: 130px;
       background-position: bottom right;
       background-repeat: no-repeat;
-      background-size: 72% 100%;
+      background-size: contain;
+      z-index: 1;
+    }
+    .tooltip-body::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: rgba(255, 255, 255, 0.75); /* Soft white layer for better readability */
+      z-index: 0;
+    }
+    .tooltip-title,
+    .tooltip-description,
+    .tooltip-link {
+      position: relative;
+      z-index: 1;
     }
     .tooltip-title {
       font-size: 22px;
       font-weight: bold;
       font-family: 'Lato', sans-serif;
+      text-shadow: 0px 1px 2px rgba(0,0,0,0.4);
     }
     .tooltip-description {
       margin-top: 6px;
       line-height: 1.5;
-      font-size: 13px;
+      font-size: 15px;
+      text-shadow: 0px 1px 2px rgba(0,0,0,0.3);
     }
     .tooltip-link {
       margin-top: 10px;
       font-size: 12px;
       word-break: break-word;
+      text-shadow: 0px 1px 2px rgba(0,0,0,0.3);
     }
   `;
   shadow.appendChild(baseCSS);
