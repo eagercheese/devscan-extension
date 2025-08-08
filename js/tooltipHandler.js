@@ -207,8 +207,18 @@ const iconUrls = {
         if (left + tooltipWidth > window.innerWidth - padding) {
           left = window.innerWidth - tooltipWidth - padding;
         }
+        const tooltipHeight = tooltip.offsetHeight;
+
+        if (left + tooltipWidth > window.innerWidth - padding) {
+          left = window.innerWidth - tooltipWidth - padding;
+        }
+        
         if (top < padding) {
           top = e.clientY + 20;
+        } 
+        
+        else if (top + tooltipHeight > window.innerHeight - padding) {
+          top = window.innerHeight - tooltipHeight - padding;
         }
 
         host.style.left = `${left}px`;

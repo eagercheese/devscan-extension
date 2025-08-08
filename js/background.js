@@ -128,6 +128,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .then(sessionId => sendResponse({ success: true, sessionId }))
       .catch(error => sendResponse({ success: false, error: error.message }));
     return true; // Keep message channel open for async response
+  } else if (message.action === "addMaliciousUrl") {
+    // Allow content scripts to add URLs to malicious intercept list
+    if (message.url) {
+      addMaliciousUrl(message.url);
+      sendResponse({ success: true });
+    } else {
+      sendResponse({ success: false, error: "URL required" });
+    }
+  } else if (message.action === "clearMaliciousUrls") {
+    // Allow content scripts to clear the malicious URL list
+    clearOldMaliciousUrls();
+    sendResponse({ success: true });
   }
 });
 
@@ -194,8 +206,13 @@ async function handleServerAnalysis(links, domain, providedSessionId, tabId) {
       // show the verdict in the background.js console - monitoring
       console.log(`[DEVScan Background] Processed ${result.processed} link verdicts:`);
       for (const [url, verdict] of Object.entries(result.verdicts)) {
-        console.log(`  - ${url} → ${verdict}`);
-}
+        console.log(`  - ${url} → ${verdict.isMalicious ? 'MALICIOUS' : 'SAFE'}`);
+        
+        // Add malicious URLs to intercept list for click-based blocking
+        if (verdict.isMalicious) {
+          addMaliciousUrl(url);
+        }
+      }
 
       return { 
         verdicts: result.verdicts, 
@@ -233,6 +250,7 @@ async function handleServerAnalysis(links, domain, providedSessionId, tabId) {
             // Convert numerical scores to extension verdict categories
             if (result.isMalicious) {
               verdict = "malicious";
+              addMaliciousUrl(link); // Add to intercept list
             } else if (result.anomalyScore > 0.7) {
               verdict = "danger";
             } else if (result.anomalyScore > 0.5) {
@@ -301,44 +319,47 @@ chrome.runtime.onMessage.addListener((message, sender) => {
 //   });
 // }
 
+// ==============================
+// CLICK-BASED MALICIOUS LINK INTERCEPTION
+// ==============================
+// Only intercepts when user clicks on links that were previously identified as malicious
+
+let maliciousUrls = new Set(); // Store URLs identified as malicious
+
 function interceptURL(url, details) {
   console.log("[DEVScan Intercepted] URL:", url);
 
   const decodedUrl = decodeURIComponent(url);
 
-  let domain = "unknown";
-  try {
-    domain = new URL(decodedUrl).hostname;
-  } catch (err) {
-    console.warn("Invalid intercepted URL:", decodedUrl);
+  // Only intercept if this URL was previously identified as malicious
+  if (maliciousUrls.has(decodedUrl)) {
+    console.log("[DEVScan Intercepted] Blocking malicious URL:", decodedUrl);
+    
+    chrome.tabs.sendMessage(details.tabId, {
+      action: "redirectToWarningPage",
+      targetUrl: decodedUrl,
+      openerTabId: details.tabId
+    });
   }
-
-  chrome.storage.sync.get("currentSessionId", ({ currentSessionId }) => {
-    handleServerAnalysis([decodedUrl], domain, currentSessionId, details.tabId).then((result) => {
-      const verdict = result.verdicts[decodedUrl];
-
-      if (verdict === "malicious") {
-      chrome.tabs.sendMessage(details.tabId, {
-        action: "redirectToWarningPage",
-        targetUrl: decodedUrl,
-        openerTabId: details.tabId
-      });
 }
 
+// Function to add malicious URLs to the intercept list
+function addMaliciousUrl(url) {
+  maliciousUrls.add(url);
+  console.log("[DEVScan] Added malicious URL to intercept list:", url);
+}
 
-
-    }).catch((err) => {
-      console.error("[DEVScan Intercepted] Analysis failed:", err);
-    });
-  });
+// Function to clear old malicious URLs (cleanup)
+function clearOldMaliciousUrls() {
+  maliciousUrls.clear();
+  console.log("[DEVScan] Cleared malicious URL intercept list");
 }
 
 chrome.webRequest.onBeforeRequest.addListener(
   (details) => {
     interceptURL(details.url, details);
-
     // observe-only: return nothing
   },
-   { urls: ["<all_urls>"], types: ["main_frame"] },               // listener filter
+  { urls: ["<all_urls>"], types: ["main_frame"] },
   // no "blocking" extraInfoSpec here
 );

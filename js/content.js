@@ -102,10 +102,10 @@ function processLink(link) {
   attachRiskTooltip(link, riskLevel);
   link.dataset.devscanRisk = riskLevel; // Store the determined risk on the element for click handling
 
-   // Create click handler that ALWAYS opens warning page for risky links
+   // Create click handler that ONLY opens warning page for malicious links
   const clickHandler = (e) => {
-    const storedRisk = link.dataset.devscanRisk || "unknown";
-    if (["danger", "warning", "malicious", "anomalous"].includes(storedRisk)) {
+    const storedRisk = link.dataset.devscanRisk || "safe";
+    if (storedRisk === "malicious" || storedRisk === "danger") {
       e.preventDefault();
       e.stopPropagation();
       chrome.runtime.sendMessage({
@@ -211,8 +211,10 @@ function sendLinkBatch() {
 
         // Update local verdicts cache with server results
         for (const [url, verdict] of Object.entries(response.verdicts || {})) {
-          linkVerdicts.set(url, verdict);
-          updateLinkTooltip(url, verdict);
+          // Convert server verdict object to risk level string
+          const riskLevel = verdict.isMalicious ? "malicious" : "safe";
+          linkVerdicts.set(url, riskLevel);
+          updateLinkTooltip(url, riskLevel);
         }
       } else {
         // Remove from processed set if server processing failed
