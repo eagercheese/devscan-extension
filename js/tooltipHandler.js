@@ -3,6 +3,7 @@ const iconUrls = {
   warning: chrome.runtime.getURL("css/picture/caution_exclamation.png"),
   safe: chrome.runtime.getURL("css/picture/caution_mark_green.png"),
   failed: chrome.runtime.getURL("css/picture/exclamationMark.png"),
+  scanning: chrome.runtime.getURL("css/picture/warning_exclamation.png"),
 };
 
 (function () {
@@ -53,6 +54,15 @@ const iconUrls = {
       background: "#34a853",
       titleColor: "#1e7e34",
     },
+    scanning: {
+      label: "SCANNING",
+      subtext: "Analysis in Progress",
+      mainTitle: "CHECKING SAFETY",
+      description:
+        "This link is currently being analyzed by our AI security system. Please wait for the scan to complete before proceeding.",
+      background: "#2196f3",
+      titleColor: "#1976d2",
+    },
     failed: {
       label: "SCAN FAILED",
       subtext: "Unable to Analyze",
@@ -82,6 +92,13 @@ const iconUrls = {
       padding: 16px 20px;
       color: white;
     }
+    .tooltip-wrapper.scanning {
+      animation: scanningPulse 2s ease-in-out infinite;
+    }
+    @keyframes scanningPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
     .tooltip-header {
       display: flex;
       justify-content: space-between;
@@ -99,6 +116,13 @@ const iconUrls = {
     .tooltip-icon {
       width: 28px;
       height: 28px;
+    }
+    .tooltip-icon.scanning {
+      animation: scanningRotate 2s linear infinite;
+    }
+    @keyframes scanningRotate {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
     }
     .tooltip-body {
       margin-top: 16px;
@@ -148,7 +172,7 @@ const iconUrls = {
   `;
   shadow.appendChild(baseCSS);
 
-  window.attachRiskTooltip = function (link, level = "safe") {
+  window.attachRiskTooltip = function (link, level = "scanning") {
     if (!link) return;
     const risk = styles[level] || styles.safe;
 
@@ -171,8 +195,9 @@ const iconUrls = {
       link.addEventListener("mouseenter", () => {
         tooltip.style.display = "block";
         tooltip.style.background = risk.background;
+        const isScanning = level === "scanning";
         tooltip.innerHTML = `
-          <div class="tooltip-wrapper">
+          <div class="tooltip-wrapper${isScanning ? ' scanning' : ''}">
             <div class="tooltip-header">
               <div>
                 <div class="tooltip-label">${risk.label}</div>
@@ -180,7 +205,7 @@ const iconUrls = {
               </div>
               <img src="${chrome.runtime.getURL(
                 "css/picture/exclamationMark.png"
-              )}" alt="!" class="tooltip-icon" />
+              )}" alt="!" class="tooltip-icon${isScanning ? ' scanning' : ''}" />
             </div>
             <div class="tooltip-body" style="background-image: url('${
               iconUrls[level]

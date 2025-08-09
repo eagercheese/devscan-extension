@@ -225,62 +225,9 @@ async function handleServerAnalysis(links, domain, providedSessionId, tabId) {
   } catch (error) {
     console.error("[DEVScan Background] Server analysis failed:", error);
     
-    // ==============================
-    // FALLBACK PROCESSING
-    // ==============================
-    // Try individual link scanning for critical links if main endpoint fails
-    try {
-      const verdicts = {};
-      const criticalLinks = links.slice(0, 5); // Only try first 5 links as fallback
-      
-      for (const link of criticalLinks) {
-        try {
-          const response = await fetch(`${baseUrl}/api/scan-links/scan-link`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ url: link })
-          });
-          
-          if (response.ok) {
-            const result = await response.json();
-            let verdict = "safe";
-            
-            // Convert numerical scores to extension verdict categories
-            if (result.isMalicious) {
-              verdict = "malicious";
-              addMaliciousUrl(link); // Add to intercept list
-            } else if (result.anomalyScore > 0.7) {
-              verdict = "danger";
-            } else if (result.anomalyScore > 0.5) {
-              verdict = "warning";
-            } else if (result.anomalyScore > 0.3) {
-              verdict = "anomalous";
-            }
-            
-            verdicts[link] = verdict;
-          }
-        } catch (linkError) {
-          console.warn(`[DEVScan Background] Failed to scan individual link ${link}:`, linkError);
-          verdicts[link] = "failed";
-        }
-      }
-      
-      // Send available verdicts back to content script
-      if (Object.keys(verdicts).length > 0) {
-        chrome.tabs.sendMessage(tabId, {
-          action: "updateLinkVerdicts",
-          verdicts: verdicts
-        });
-      }
-      
-      return { verdicts, sessionId };
-      
-    } catch (fallbackError) {
-      console.error("[DEVScan Background] Fallback scanning also failed:", fallbackError);
-      throw error; // Throw original error
-    }
+    // No fallback processing - only use server verdicts
+    // If server is unavailable, links will remain in "scanning" state
+    throw error;
   }
 }
 

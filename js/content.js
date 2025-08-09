@@ -97,8 +97,18 @@ function processLink(link) {
 
   collectLinkForAnalysis(link.href); // Add external link to collection for server processing
 
-  // Use server verdict if available, otherwise fall back to local risk assessment
-  const riskLevel = linkVerdicts.get(link.href) || determineRisk(link.href);
+  // Show "scanning" initially, then update with server verdict or local assessment
+  const serverVerdict = linkVerdicts.get(link.href);
+  let riskLevel;
+  
+  if (serverVerdict) {
+    // We already have a server verdict
+    riskLevel = serverVerdict;
+  } else {
+    // Show scanning state while waiting for server analysis
+    riskLevel = "scanning";
+  }
+  
   attachRiskTooltip(link, riskLevel);
   link.dataset.devscanRisk = riskLevel; // Store the determined risk on the element for click handling
 
@@ -220,10 +230,11 @@ function sendLinkBatch() {
         // Remove from processed set if server processing failed
         linksArray.forEach((url) => {
           pageProcessedLinks.delete(url);
+          // No local fallback - links remain in "scanning" state if server fails
+          // Only update tooltip if we don't already have a verdict
           if (!linkVerdicts.has(url)) {
-            const localVerdict = determineRisk(url);
-            linkVerdicts.set(url, localVerdict);
-            updateLinkTooltip(url, localVerdict);
+            linkVerdicts.set(url, "failed");
+            updateLinkTooltip(url, "failed");
           }
         });
         collectedLinks.clear();
@@ -392,8 +403,17 @@ chrome.storage.onChanged.addListener((changes) => {
       if (isSameDomain(link.href, window.location.href)) return;
 
       if (highlightEnabled) {
-        const riskLevel =
-          linkVerdicts.get(link.href) || determineRisk(link.href);
+        const serverVerdict = linkVerdicts.get(link.href);
+        let riskLevel;
+        
+        if (serverVerdict) {
+          // We already have a server verdict
+          riskLevel = serverVerdict;
+        } else {
+          // Show scanning state while waiting for server analysis
+          riskLevel = "scanning";
+        }
+        
         delete link.dataset.devscanStyled;
         window.attachRiskTooltip(link, riskLevel);
       } else {
