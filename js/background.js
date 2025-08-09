@@ -115,13 +115,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   } else if (message.action === "analyzeSingleLink") {
     // Handle individual link analysis for immediate verdict delivery
     handleSingleLinkAnalysis(message.url, message.domain, message.sessionId, sender.tab.id)
-      .then(result => sendResponse({ 
-        success: true, 
-        verdict: result.verdict,
-        sessionId: result.sessionId 
-      }))
-      .catch(error => sendResponse({ success: false, error: error.message }));
-    return true; // Keep message channel open for async response
+      .catch(error => {
+        console.error("[DEVScan Background] Single link analysis failed:", error);
+        // Send failure message to content script
+        chrome.tabs.sendMessage(sender.tab.id, {
+          action: "updateSingleLinkVerdict",
+          url: message.url,
+          verdict: "failed"
+        });
+      });
+    // Don't use sendResponse - use direct messaging instead
   } else if (message.action === "createSession") {
     // Allow content scripts to request session creation
     createNewScanSession()
@@ -158,6 +161,13 @@ async function handleSingleLinkAnalysis(url, domain, providedSessionId, tabId) {
     const sessionId = providedSessionId || currentSessionId;
     
     console.log(`[DEVScan Background] Analyzing single link: ${url}`);
+    console.log(`[DEVScan Background] Request payload:`, {
+      links: [url],
+      domain: domain,
+      sessionId: sessionId,
+      browserInfo: `Chrome Extension v4.0 - ${domain}`,
+      singleLink: true
+    });
     
     const response = await fetch(`${baseUrl}/api/extension/analyze`, {
       method: "POST",
@@ -178,18 +188,75 @@ async function handleSingleLinkAnalysis(url, domain, providedSessionId, tabId) {
     }
     
     const result = await response.json();
+    console.log(`[DEVScan Background] Server response:`, result);
     
-    if (result.success && result.verdicts && result.verdicts[url]) {
-      const verdict = result.verdicts[url]; // This is a string: "safe", "malicious", "danger", etc.
+    if (result.success && result.verdicts) {
+      console.log(`[DEVScan Background] Available verdicts:`, Object.keys(result.verdicts));
+      console.log(`[DEVScan Background] Looking for URL:`, url);
       
-      console.log(`[DEVScan Background] ✅ Received verdict for ${url}: ${verdict}`);
+      // Try to find the verdict for this URL (exact match first)
+      let verdict = result.verdicts[url];
       
-      // Send verdict directly to content script (it's already a string)
-      chrome.tabs.sendMessage(tabId, {
-        action: "updateSingleLinkVerdict",
-        url: url,
-        verdict: verdict // Send the string verdict directly
-      });
+      if (!verdict) {
+        // If exact match fails, try to find by partial match or URL variations
+        console.log(`[DEVScan Background] No exact match for ${url}, checking variations...`);
+        
+        for (const [responseUrl, responseVerdict] of Object.entries(result.verdicts)) {
+          console.log(`[DEVScan Background] Comparing '${url}' with '${responseUrl}'`);
+          
+          // Try decoding both URLs in case of encoding differences
+          try {
+            const decodedRequestUrl = decodeURIComponent(url);
+            const decodedResponseUrl = decodeURIComponent(responseUrl);
+            
+            if (decodedRequestUrl === decodedResponseUrl) {
+              verdict = responseVerdict;
+              console.log(`[DEVScan Background] Found match after URL decoding`);
+              break;
+            }
+            
+            // Also try without query parameters
+            const requestUrlBase = decodedRequestUrl.split('?')[0];
+            const responseUrlBase = decodedResponseUrl.split('?')[0];
+            
+            if (requestUrlBase === responseUrlBase) {
+              verdict = responseVerdict;
+              console.log(`[DEVScan Background] Found match ignoring query parameters`);
+              break;
+            }
+          } catch (e) {
+            console.log(`[DEVScan Background] Error decoding URLs:`, e);
+          }
+        }
+      }
+      
+      if (verdict) {
+        console.log(`[DEVScan Background] ✅ Received verdict for ${url}: ${verdict}`);
+        console.log(`[DEVScan Background] 📤 Sending verdict to tab ${tabId}`);
+        
+        // Send verdict directly to content script (it's already a string)
+        chrome.tabs.sendMessage(tabId, {
+          action: "updateSingleLinkVerdict",
+          url: url,
+          verdict: verdict // Send the string verdict directly
+        }, (response) => {
+          if (chrome.runtime.lastError) {
+            console.error(`[DEVScan Background] ❌ Failed to send message to tab ${tabId}:`, chrome.runtime.lastError);
+          } else {
+            console.log(`[DEVScan Background] ✅ Successfully sent verdict to tab ${tabId}, response:`, response);
+          }
+        });
+      } else {
+        console.error(`[DEVScan Background] ❌ No verdict found for ${url} in server response`);
+        console.log(`[DEVScan Background] Available URLs:`, Object.keys(result.verdicts));
+        
+        // Send unknown verdict
+        chrome.tabs.sendMessage(tabId, {
+          action: "updateSingleLinkVerdict",
+          url: url,
+          verdict: "unknown"
+        });
+      }
       
       // Store session ID if provided by server
       if (result.session_ID) {

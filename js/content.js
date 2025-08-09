@@ -163,53 +163,18 @@ function collectLinkForAnalysis(rawUrl) {
 function analyzeSingleLink(url) {
   const currentDomain = window.location.hostname;
   
-  chrome.runtime.sendMessage(
-    {
-      action: "analyzeSingleLink",
-      url: url,
-      domain: currentDomain,
-      sessionId: currentSessionId
-    },
-    (response) => {
-      if (chrome.runtime.lastError) {
-        console.error("[DEVScan] Extension error:", chrome.runtime.lastError);
-        // Remove from processed set if analysis failed, so it can be retried
-        pageProcessedLinks.delete(url);
-        collectedLinks.delete(url);
-        
-        if (!linkVerdicts.has(url)) {
-          linkVerdicts.set(url, "failed");
-          updateLinkTooltip(url, "failed");
-        }
-        return;
-      }
-
-      if (response && response.success) {
-        // Update session ID if provided by server
-        if (response.sessionId) { 
-          currentSessionId = response.sessionId;
-        }
-
-        // Store the verdict and update tooltip immediately
-        linkVerdicts.set(url, response.verdict);
-        updateLinkTooltip(url, response.verdict);
-        
-        // Remove from collection since it's processed
-        collectedLinks.delete(url);
-        
-        console.log(`[DEVScan] Immediate verdict: ${url} → ${response.verdict.toUpperCase()}`);
-      } else {
-        // Analysis failed, remove from processed set for retry
-        pageProcessedLinks.delete(url);
-        collectedLinks.delete(url);
-        
-        if (!linkVerdicts.has(url)) {
-          linkVerdicts.set(url, "failed");
-          updateLinkTooltip(url, "failed");
-        }
-      }
-    }
-  );
+  console.log(`[DEVScan] 📤 Sending single link for analysis: ${url}`);
+  console.log(`[DEVScan] 🔍 URL length: ${url.length}, Domain: ${currentDomain}`);
+  
+  chrome.runtime.sendMessage({
+    action: "analyzeSingleLink",
+    url: url,
+    domain: currentDomain,
+    sessionId: currentSessionId
+  });
+  
+  // The response will come via the "updateSingleLinkVerdict" message listener
+  // No need for response callback - using direct messaging instead
 }
 
 
@@ -226,12 +191,51 @@ function isSameDomain(url1, url2) {
 }
 // Update tooltip display for a specific URL with new verdict
 function updateLinkTooltip(url, verdict) {
+  console.log(`[DEVScan] 🔄 Updating tooltip for ${url} with verdict: ${verdict}`);
+  console.log(`[DEVScan] 🔍 URL to match: "${url}" (length: ${url.length})`);
+  
   const links = document.querySelectorAll(`a[href="${url}"]`);
+  console.log(`[DEVScan] 🔍 Found ${links.length} elements with exact href match`);
+  
+  if (links.length === 0) {
+    // Log all hrefs on the page to debug URL matching
+    const allLinks = document.querySelectorAll('a[href]');
+    console.log(`[DEVScan] 🔍 Total links on page: ${allLinks.length}`);
+    
+    // Check for partial matches
+    const partialMatches = Array.from(allLinks).filter(link => link.href.includes(url) || url.includes(link.href));
+    console.log(`[DEVScan] 🔍 Found ${partialMatches.length} partial matches`);
+    
+    if (partialMatches.length > 0) {
+      console.log(`[DEVScan] 🔍 Partial match examples:`, partialMatches.slice(0, 3).map(link => link.href));
+    }
+    
+    // Try alternative URL matching approaches
+    const encodedUrl = encodeURI(url);
+    const alternativeLinks = document.querySelectorAll(`a[href="${encodedUrl}"]`);
+    console.log(`[DEVScan] 🔍 Found ${alternativeLinks.length} elements with encoded URL: "${encodedUrl}"`);
+    
+    if (alternativeLinks.length === 0) {
+      console.warn(`[DEVScan] ⚠️ No elements found for URL: ${url}`);
+      return;
+    }
+    
+    alternativeLinks.forEach((link) => {
+      delete link.dataset.tooltipBound;
+      delete link.dataset.devscanStyled;
+      link.dataset.devscanRisk = verdict;
+      attachRiskTooltip(link, verdict);
+      console.log(`[DEVScan] ✅ Updated alternative link with verdict: ${verdict}`);
+    });
+    return;
+  }
+  
   links.forEach((link) => {
     delete link.dataset.tooltipBound;
     delete link.dataset.devscanStyled;
     link.dataset.devscanRisk = verdict;
     attachRiskTooltip(link, verdict);
+    console.log(`[DEVScan] ✅ Updated link with verdict: ${verdict}`);
   });
 }
 
@@ -334,15 +338,47 @@ function startDOMObserver() {
 // ==============================
 
 // Listen for messages from background script and other extension components
-chrome.runtime.onMessage.addListener((msg) => {
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  console.log(`[DEVScan] 📨 Received message:`, msg);
+  
   if (msg.action === "showToast") {
     showToast(msg.message, msg.type);
   } else if (msg.action === "updateSingleLinkVerdict") {
     // Handle individual link verdict updates for immediate feedback
     const { url, verdict } = msg;
+    
+    console.log(`[DEVScan] 📥 Received immediate verdict: ${url} → ${verdict.toUpperCase()}`);
+    console.log(`[DEVScan] Current linkVerdicts size:`, linkVerdicts.size);
+    console.log(`[DEVScan] Current collectedLinks size:`, collectedLinks.size);
+    
+    // Store the verdict and update tooltip
     linkVerdicts.set(url, verdict);
-    updateLinkTooltip(url, verdict);
-    console.log(`[DEVScan] Received immediate verdict: ${url} → ${verdict.toUpperCase()}`);
+    console.log(`[DEVScan] Stored verdict in linkVerdicts map`);
+    
+    const updateSuccess = updateLinkTooltip(url, verdict);
+    console.log(`[DEVScan] Tooltip update result:`, updateSuccess);
+    
+    // Clean up processing state
+    collectedLinks.delete(url);
+    console.log(`[DEVScan] Cleaned up collectedLinks`);
+    
+    // Send response back to background script
+    if (sendResponse) {
+      sendResponse({
+        success: updateSuccess,
+        message: updateSuccess ? 'Verdict processed successfully' : 'Failed to update tooltip',
+        url: url,
+        verdict: verdict
+      });
+    }
+    
+    // Only remove from pageProcessedLinks if it failed, otherwise keep it to prevent reprocessing
+    if (verdict === "failed") {
+      pageProcessedLinks.delete(url);
+    }
+    
+    // Send response to acknowledge receipt
+    sendResponse({ success: true });
   } else if (msg.action === "sessionUpdated") {
     currentSessionId = msg.sessionId;
     console.log("[DEVScan] Session updated:", currentSessionId);
