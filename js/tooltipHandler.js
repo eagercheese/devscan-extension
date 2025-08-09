@@ -1,6 +1,8 @@
 const iconUrls = {
   danger: chrome.runtime.getURL("css/picture/caution_mark_red.png"),
   warning: chrome.runtime.getURL("css/picture/caution_exclamation.png"),
+  malicious: chrome.runtime.getURL("css/picture/caution_mark_red.png"), // Same as danger
+  anomalous: chrome.runtime.getURL("css/picture/caution_exclamation.png"), // Same as warning
   safe: chrome.runtime.getURL("css/picture/caution_mark_green.png"),
   failed: chrome.runtime.getURL("css/picture/exclamationMark.png"),
   scanning: chrome.runtime.getURL("css/picture/warning_exclamation.png"),
@@ -36,6 +38,15 @@ const iconUrls = {
       background: "#b80f0a",
       titleColor: "#b80f0a",
     },
+    malicious: {
+      label: "MALICIOUS!",
+      subtext: "Threat Detected",
+      mainTitle: "DANGEROUS CONTENT",
+      description:
+        "Our AI security system has identified this link as malicious. This content may attempt to steal your information, install malware, or perform other harmful actions.",
+      background: "#c41e3a",
+      titleColor: "#c41e3a",
+    },
     warning: {
       label: "CAUTION",
       subtext: "Anomaly Detected",
@@ -44,6 +55,15 @@ const iconUrls = {
         "This page may exhibit suspicious traits or behaviors that resemble phishing or malware activity. It is recommended to proceed with caution.",
       background: "#f4b400",
       titleColor: "#e2960a",
+    },
+    anomalous: {
+      label: "SUSPICIOUS",
+      subtext: "Unusual Activity",
+      mainTitle: "ANOMALY DETECTED",
+      description:
+        "This link exhibits patterns that deviate from normal, safe websites. While not definitively malicious, it warrants careful consideration before proceeding.",
+      background: "#ff8c00",
+      titleColor: "#cc6900",
     },
     safe: {
       label: "SAFE",
@@ -173,7 +193,13 @@ const iconUrls = {
   shadow.appendChild(baseCSS);
 
   window.attachRiskTooltip = function (link, level = "scanning") {
-    if (!link) return;
+    if (!link) {
+      console.warn("[DEVScan] ⚠️ attachRiskTooltip called with null link");
+      return;
+    }
+    
+    console.log(`[DEVScan] 🏷️ Attaching tooltip to link: ${link.href || link.src} with level: ${level}`);
+    
     const risk = styles[level] || styles.safe;
 
     chrome.storage.sync.get("showWarningsOnly", ({ showWarningsOnly }) => {

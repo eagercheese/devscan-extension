@@ -112,12 +112,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       index: sender.tab.index + 1,
       openerTabId: sender.tab.id,
     });
-  } else if (message.action === "sendLinksToServer") {
-    // Handle bulk link analysis requests from content scripts
-    handleServerAnalysis(message.links, message.domain, message.sessionId, sender.tab.id)
+  } else if (message.action === "analyzeSingleLink") {
+    // Handle individual link analysis for immediate verdict delivery
+    handleSingleLinkAnalysis(message.url, message.domain, message.sessionId, sender.tab.id)
       .then(result => sendResponse({ 
         success: true, 
-        verdicts: result.verdicts,
+        verdict: result.verdict,
         sessionId: result.sessionId 
       }))
       .catch(error => sendResponse({ success: false, error: error.message }));
@@ -147,8 +147,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // SERVER COMMUNICATION
 // ==============================
 
-// Main function to handle server analysis requests
-async function handleServerAnalysis(links, domain, providedSessionId, tabId) {
+// Handle individual link analysis for immediate verdict delivery
+async function handleSingleLinkAnalysis(url, domain, providedSessionId, tabId) {
   try {
     // Get server URL and session ID from storage
     const { serverUrl, currentSessionId } = await chrome.storage.sync.get(["serverUrl", "currentSessionId"]);
@@ -157,8 +157,7 @@ async function handleServerAnalysis(links, domain, providedSessionId, tabId) {
     // Use provided session ID or fallback to stored one
     const sessionId = providedSessionId || currentSessionId;
     
-    // Send links to extension API endpoint
-    console.log(`[DEVScan Background] Sending ${links.length} links from ${domain} to extension API (Session: ${sessionId})`);
+    console.log(`[DEVScan Background] Analyzing single link: ${url}`);
     
     const response = await fetch(`${baseUrl}/api/extension/analyze`, {
       method: "POST",
@@ -166,10 +165,11 @@ async function handleServerAnalysis(links, domain, providedSessionId, tabId) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        links: links,
+        links: [url], // Send as single-item array
         domain: domain,
         sessionId: sessionId,
-        browserInfo: `Chrome Extension v4.0 - ${domain}`
+        browserInfo: `Chrome Extension v4.0 - ${domain}`,
+        singleLink: true // Flag to indicate individual analysis
       })
     });
     
@@ -179,43 +179,33 @@ async function handleServerAnalysis(links, domain, providedSessionId, tabId) {
     
     const result = await response.json();
     
-    if (result.success && result.verdicts) {
-      // Send verdicts back to content script for UI updates
+    if (result.success && result.verdicts && result.verdicts[url]) {
+      const verdict = result.verdicts[url]; // This is a string: "safe", "malicious", "danger", etc.
+      
+      console.log(`[DEVScan Background] ✅ Received verdict for ${url}: ${verdict}`);
+      
+      // Send verdict directly to content script (it's already a string)
       chrome.tabs.sendMessage(tabId, {
-        action: "updateLinkVerdicts",
-        verdicts: result.verdicts
+        action: "updateSingleLinkVerdict",
+        url: url,
+        verdict: verdict // Send the string verdict directly
       });
       
       // Store session ID if provided by server
       if (result.session_ID) {
         await chrome.storage.sync.set({ currentSessionId: result.session_ID });
-        
-        // Broadcast session update to all content scripts
-        chrome.tabs.query({}, (tabs) => {
-          tabs.forEach(tab => {
-            chrome.tabs.sendMessage(tab.id, {
-              action: "sessionUpdated",
-              sessionId: result.session_ID
-            }).catch(() => {
-              // Ignore errors for tabs that don't have content scripts
-            });
-          });
-        });
       }
       
-      // show the verdict in the background.js console - monitoring
-      console.log(`[DEVScan Background] Processed ${result.processed} link verdicts:`);
-      for (const [url, verdict] of Object.entries(result.verdicts)) {
-        console.log(`  - ${url} → ${verdict.isMalicious ? 'MALICIOUS' : 'SAFE'}`);
-        
-        // Add malicious URLs to intercept list for click-based blocking
-        if (verdict.isMalicious) {
-          addMaliciousUrl(url);
-        }
+      // Add malicious URLs to intercept list for click-based blocking
+      if (verdict === "malicious" || verdict === "danger") {
+        addMaliciousUrl(url);
+        console.log(`[DEVScan Background] 🚨 Added ${url} to malicious intercept list`);
       }
-
+      
+      console.log(`[DEVScan Background] Single link verdict: ${url} → ${verdict.toUpperCase()}`);
+      
       return { 
-        verdicts: result.verdicts, 
+        verdict: verdict, 
         sessionId: result.session_ID || sessionId 
       };
     } else {
@@ -223,10 +213,7 @@ async function handleServerAnalysis(links, domain, providedSessionId, tabId) {
     }
     
   } catch (error) {
-    console.error("[DEVScan Background] Server analysis failed:", error);
-    
-    // No fallback processing - only use server verdicts
-    // If server is unavailable, links will remain in "scanning" state
+    console.error("[DEVScan Background] Single link analysis failed:", error);
     throw error;
   }
 }

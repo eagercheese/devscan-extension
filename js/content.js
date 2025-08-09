@@ -7,12 +7,35 @@
 
 /* MAS PINA AYOS YUNG MGA MODULES */
 
+console.log("[DEVScan] 🚀 Content script loaded on:", window.location.href);
+console.log("[DEVScan] 🔍 Script version: 4.0");
+
+// ==============================
+// GLOBAL STATE MANAGEMENT (MOVED TO TOP)
+// ==============================
+
+let collectedLinks = new Set();     // Links currently being analyzed
+let linkVerdicts = new Map();       // Server verdicts cached locally
+let currentSessionId = null;        // Current scan session ID
+
+// ==============================
+// PAGE-BASED SCANNING STATE (MOVED TO TOP)
+// ==============================
+let currentPageUrl = window.location.href;        // Track current page URL
+let pageProcessedLinks = new Set();               // Links processed for current page
+let pageRefreshDetected = false;                  // Track if page was refreshed
+let pageLoadTime = Date.now();                    // Track when page loaded
+
 // ==============================
 // INITIALIZATION & SESSION MANAGEMENT
 // ==============================
 
 // Initialize settings from extension storage
-watchBlockingSetting();
+if (typeof watchBlockingSetting === 'function') {
+  watchBlockingSetting();
+} else {
+  console.warn('[DEVScan] ⚠️ watchBlockingSetting function not available');
+}
 
 // Detect if this is a page refresh or new navigation
 const navigationEntry = performance.getEntriesByType('navigation')[0];
@@ -38,26 +61,6 @@ chrome.storage.sync.get(['currentSessionId'], (result) => {
     });
   }
 });
-
-// ==============================
-// GLOBAL STATE MANAGEMENT
-// ==============================
-
-let collectedLinks = new Set();     // Links waiting to be sent to server
-let processedLinks = new Set();     // Links already sent to server (prevents duplicates)
-let linkVerdicts = new Map();       // Server verdicts cached locally
-const BATCH_SIZE = 50;              // Maximum links per batch request
-const BATCH_DELAY = 2500;           // 2.5 seconds delay before sending batch
-let batchTimeout = null;            // Timeout handle for batch sending
-let currentSessionId = null;        // Current scan session ID
-
-// ==============================
-// PAGE-BASED SCANNING STATE
-// ==============================
-let currentPageUrl = window.location.href;        // Track current page URL
-let pageProcessedLinks = new Set();               // Links processed for current page
-let pageRefreshDetected = false;                  // Track if page was refreshed
-let pageLoadTime = Date.now();                    // Track when page loaded
 
 const selectors = [
     "a[href]",
@@ -141,26 +144,72 @@ function collectLinkForAnalysis(rawUrl) {
     
     if (isSameDomain(decodedUrl, window.location.href)) return;
 
-    // Check if this link was already processed for current page
+    // Check if this link was already processed or is being processed
     if (!collectedLinks.has(decodedUrl) && !pageProcessedLinks.has(decodedUrl)) {
       collectedLinks.add(decodedUrl);
+      pageProcessedLinks.add(decodedUrl); // Mark as being processed
 
-      console.log("[DEVScan] Acquired link:", decodedUrl);
+      console.log("[DEVScan] Analyzing link immediately:", decodedUrl);
       
-      if (batchTimeout) clearTimeout(batchTimeout);
-
-      batchTimeout = setTimeout(() => {
-        sendLinkBatch();
-      }, BATCH_DELAY);
-
-      if (collectedLinks.size >= BATCH_SIZE) {
-        clearTimeout(batchTimeout);
-        sendLinkBatch();
-      }
+      // Send individual link for immediate analysis
+      analyzeSingleLink(decodedUrl);
     }
   } catch (e) {
     console.warn("[DEVScan] Failed to decode URL:", rawUrl, e);
   }
+}
+
+// Analyze a single link immediately
+function analyzeSingleLink(url) {
+  const currentDomain = window.location.hostname;
+  
+  chrome.runtime.sendMessage(
+    {
+      action: "analyzeSingleLink",
+      url: url,
+      domain: currentDomain,
+      sessionId: currentSessionId
+    },
+    (response) => {
+      if (chrome.runtime.lastError) {
+        console.error("[DEVScan] Extension error:", chrome.runtime.lastError);
+        // Remove from processed set if analysis failed, so it can be retried
+        pageProcessedLinks.delete(url);
+        collectedLinks.delete(url);
+        
+        if (!linkVerdicts.has(url)) {
+          linkVerdicts.set(url, "failed");
+          updateLinkTooltip(url, "failed");
+        }
+        return;
+      }
+
+      if (response && response.success) {
+        // Update session ID if provided by server
+        if (response.sessionId) { 
+          currentSessionId = response.sessionId;
+        }
+
+        // Store the verdict and update tooltip immediately
+        linkVerdicts.set(url, response.verdict);
+        updateLinkTooltip(url, response.verdict);
+        
+        // Remove from collection since it's processed
+        collectedLinks.delete(url);
+        
+        console.log(`[DEVScan] Immediate verdict: ${url} → ${response.verdict.toUpperCase()}`);
+      } else {
+        // Analysis failed, remove from processed set for retry
+        pageProcessedLinks.delete(url);
+        collectedLinks.delete(url);
+        
+        if (!linkVerdicts.has(url)) {
+          linkVerdicts.set(url, "failed");
+          updateLinkTooltip(url, "failed");
+        }
+      }
+    }
+  );
 }
 
 
@@ -175,74 +224,6 @@ function isSameDomain(url1, url2) {
     return false;
   }
 }
-
-// Send collected links to server for analysis
-function sendLinkBatch() {
-  if (collectedLinks.size === 0) return;
-
-  const linksArray = Array.from(collectedLinks);
-  const currentDomain = window.location.hostname;
-  
-  // Mark links as processed for current page
-  linksArray.forEach(url => pageProcessedLinks.add(url));
-
-  chrome.runtime.sendMessage(
-    {
-      action: "sendLinksToServer",
-      links: linksArray,
-      domain: currentDomain,
-      sessionId: currentSessionId,
-      pageUrl: currentPageUrl,
-      pageRefreshed: pageRefreshDetected
-    },
-    (response) => {
-      if (chrome.runtime.lastError) {
-        console.error("[DEVScan] Extension error:", chrome.runtime.lastError);
-         // Remove from processed set if sending failed, so they can be retried
-        linksArray.forEach((url) => {
-          pageProcessedLinks.delete(url);
-          if (!linkVerdicts.has(url)) {
-            linkVerdicts.set(url, "failed");
-            updateLinkTooltip(url, "failed");
-          }
-        });
-        collectedLinks.clear();
-        return;
-      }
-
-      if (response && response.success) {
-        collectedLinks.clear();
-        pageRefreshDetected = false; // Reset refresh flag after successful send
-
-        // Update session ID if provided by server
-        if (response.sessionId) { 
-          currentSessionId = response.sessionId;
-        }
-
-        // Update local verdicts cache with server results
-        for (const [url, verdict] of Object.entries(response.verdicts || {})) {
-          // Convert server verdict object to risk level string
-          const riskLevel = verdict.isMalicious ? "malicious" : "safe";
-          linkVerdicts.set(url, riskLevel);
-          updateLinkTooltip(url, riskLevel);
-        }
-      } else {
-        // Remove from processed set if server processing failed
-        linksArray.forEach((url) => {
-          pageProcessedLinks.delete(url);
-          // No local fallback - links remain in "scanning" state if server fails
-          // Only update tooltip if we don't already have a verdict
-          if (!linkVerdicts.has(url)) {
-            linkVerdicts.set(url, "failed");
-            updateLinkTooltip(url, "failed");
-          }
-        });
-        collectedLinks.clear();
-      }
-    }
-  );
-}
-
 // Update tooltip display for a specific URL with new verdict
 function updateLinkTooltip(url, verdict) {
   const links = document.querySelectorAll(`a[href="${url}"]`);
@@ -263,45 +244,90 @@ function updateLinkTooltip(url, verdict) {
 
 function scanLinks() {
   const links = document.querySelectorAll(selectors.join(","));
-  links.forEach(processLink); 
+  console.log(`[DEVScan] 🔍 Found ${links.length} total links on page`);
+  
+  let externalCount = 0;
+  let internalCount = 0;
+  
+  links.forEach(link => {
+    if (link.href) {
+      const isInternal = isSameDomain(link.href, window.location.href);
+      if (isInternal) {
+        internalCount++;
+      } else {
+        externalCount++;
+        console.log(`[DEVScan] 🌐 Processing external link: ${link.href}`);
+      }
+    }
+    processLink(link);
+  });
+  
+  console.log(`[DEVScan] 📊 Link summary: ${externalCount} external, ${internalCount} internal`);
 }
 
-function earlyScanObserver() {
-  const seen = new Set();
+// ==============================
+// DYNAMIC CONTENT MONITORING
+// ==============================
 
+let scanTimeout = null;
+
+// Unified DOM observer for dynamic content and initial scan
+function startDOMObserver() {
+  console.log("[DEVScan] 🔧 Starting DOM observer...");
+  
   const observer = new MutationObserver(mutations => {
-    mutations.forEach(m => {
-      m.addedNodes.forEach(n => {
-        if (n.nodeType === 1) {
-          // If node matches any selector, process directly
-          if (n.matches && selectors.some(sel => n.matches(sel))) {
-            processLink(n);
+    let hasNewLinks = false;
+    
+    mutations.forEach(mutation => {
+      if (mutation.type === "childList") {
+        mutation.addedNodes.forEach(node => {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            // Check if the node itself matches any selector
+            if (node.matches && selectors.some(sel => node.matches(sel))) {
+              console.log("[DEVScan] 📎 Found new link element:", node.href || node.src);
+              processLink(node);
+              hasNewLinks = true;
+              return;
+            }
+            
+            // Check if the node contains any matching elements
+            if (node.querySelectorAll) {
+              const matches = node.querySelectorAll(selectors.join(","));
+              if (matches.length > 0) {
+                console.log("[DEVScan] 📎 Found", matches.length, "new link elements");
+                matches.forEach(link => processLink(link));
+                hasNewLinks = true;
+              }
+            }
           }
-
-          // Also scan all matching children
-          if (n.querySelectorAll) {
-            const matches = n.querySelectorAll(selectors.join(","));
-            matches.forEach(link => {
-              processLink(link);
-            });
-          }
-        }
-      });
+        });
+      }
     });
+    
+    if (hasNewLinks) {
+      // Debounce additional scans to avoid excessive processing
+      if (scanTimeout) clearTimeout(scanTimeout);
+      scanTimeout = setTimeout(() => {
+        console.log("[DEVScan] New links detected, rescanning...");
+        scanLinks();
+      }, 300);
+    }
   });
 
   observer.observe(document.documentElement, {
     childList: true,
-    subtree: true
+    subtree: true,
+    attributes: false,
+    characterData: false
   });
 
   // Initial scan
-  document.querySelectorAll(selectors.join(",")).forEach(link => {
-    processLink(link);
-  });
+  console.log("[DEVScan] 🔍 Starting initial page scan...");
+  const startTime = performance.now();
+  scanLinks();
+  const endTime = performance.now();
+  console.log(`[DEVScan] ⏱️ Initial scan completed in ${(endTime - startTime).toFixed(2)}ms`);
 }
-
-earlyScanObserver();
 
 // ==============================
 // MESSAGE HANDLING
@@ -311,12 +337,12 @@ earlyScanObserver();
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.action === "showToast") {
     showToast(msg.message, msg.type);
-  } else if (msg.action === "updateLinkVerdicts") {
-    const { verdicts } = msg;
-    for (const [url, verdict] of Object.entries(verdicts)) {
-      linkVerdicts.set(url, verdict);
-      updateLinkTooltip(url, verdict);
-    }
+  } else if (msg.action === "updateSingleLinkVerdict") {
+    // Handle individual link verdict updates for immediate feedback
+    const { url, verdict } = msg;
+    linkVerdicts.set(url, verdict);
+    updateLinkTooltip(url, verdict);
+    console.log(`[DEVScan] Received immediate verdict: ${url} → ${verdict.toUpperCase()}`);
   } else if (msg.action === "sessionUpdated") {
     currentSessionId = msg.sessionId;
     console.log("[DEVScan] Session updated:", currentSessionId);
@@ -425,67 +451,6 @@ chrome.storage.onChanged.addListener((changes) => {
 });
 
 // ==============================
-// INITIAL PAGE SCAN
-// ==============================
-
-// Perform initial scan of page when content script loads
-scanLinks();
-
-// ==============================
-// DYNAMIC CONTENT MONITORING
-// ==============================
-// Advanced monitoring for single-page applications (SPAs) and dynamic content loading
-// Handles infinite scroll, AJAX content updates, and URL changes without page reloads
-
-let scanTimeout = null;
-
-// Monitor DOM changes for new links (handles AJAX, infinite scroll, etc.)
-const observer = new MutationObserver((mutations) => {
-  let hasNewLinks = false;
-  
-  mutations.forEach((mutation) => {
-    if (mutation.type === "childList") {
-      mutation.addedNodes.forEach((node) => {
-        if (node.nodeType === Node.ELEMENT_NODE) {
-          // Check if the node itself is a link
-          if (node.tagName === "A" && node.href) {
-            hasNewLinks = true;
-            return;
-          }
-          
-          // Check if the node contains any links
-          if (node.querySelectorAll) {
-            const newLinks = node.querySelectorAll(selectors);
-            if (newLinks.length > 0) {
-              hasNewLinks = true;
-              return;
-            }
-          }
-        }
-      });
-    }
-  });
-  
-  if (hasNewLinks) {
-    // Debounce scan calls to avoid excessive processing on rapidly changing content
-    if (scanTimeout) clearTimeout(scanTimeout);
-    scanTimeout = setTimeout(() => {
-      console.log("[DEVScan] New links detected, rescanning...");
-      scanLinks();
-    }, 300); // Reduced delay for better responsiveness on dynamic sites
-  }
-});
-
-// Start observing DOM changes
-observer.observe(document.body, { 
-  childList: true, 
-  subtree: true,
-  // Only observe what we need to reduce overhead
-  attributes: false,
-  characterData: false
-});
-
-// ==============================
 // INFINITE SCROLL DETECTION
 // ==============================
 
@@ -544,3 +509,26 @@ const urlObserver = new MutationObserver(() => {
 urlObserver.observe(document, { subtree: true, childList: true });
 
 console.log("[DEVScan] Dynamic content monitoring started");
+
+// ==============================
+// INITIALIZATION - START EXTENSION
+// ==============================
+
+// Ensure DOM is ready before starting the extension
+function initializeExtension() {
+  try {
+    console.log("[DEVScan] 🚀 Initializing extension...");
+    startDOMObserver();
+    console.log("[DEVScan] ✅ Extension initialization complete");
+  } catch (error) {
+    console.error("[DEVScan] ❌ Extension initialization failed:", error);
+  }
+}
+
+// Start extension when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeExtension);
+} else {
+  // DOM is already ready
+  initializeExtension();
+}
