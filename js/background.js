@@ -131,19 +131,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .then(sessionId => sendResponse({ success: true, sessionId }))
       .catch(error => sendResponse({ success: false, error: error.message }));
     return true; // Keep message channel open for async response
-  } else if (message.action === "addMaliciousUrl") {
-    // Allow content scripts to add URLs to malicious intercept list
-    if (message.url) {
-      addMaliciousUrl(message.url);
-      sendResponse({ success: true });
-    } else {
-      sendResponse({ success: false, error: "URL required" });
-    }
-  } else if (message.action === "clearMaliciousUrls") {
-    // Allow content scripts to clear the malicious URL list
-    clearOldMaliciousUrls();
-    sendResponse({ success: true });
-  }
+  } 
 });
 
 // ==============================
@@ -285,6 +273,83 @@ async function handleSingleLinkAnalysis(url, domain, providedSessionId, tabId) {
   }
 }
 
+async function handleExtractLinks(maliciousUrl) {
+  try {
+    // Get server URL from storage
+    const { serverUrl } = await chrome.storage.sync.get("serverUrl");
+    const baseUrl = serverUrl || "http://localhost:3000";
+
+    console.log(`[DEVScan Background] Extracting links from: ${maliciousUrl}`);
+
+    // Call the extract-links endpoint
+    const response = await fetch(`${baseUrl}/api/extract-links`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ url: maliciousUrl }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Extract-links endpoint responded with status: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (data.success && Array.isArray(data.links)) {
+      console.log(`[DEVScan Background] Extracted ${data.links.length} links from ${maliciousUrl}:`);
+      data.links.forEach(link => console.log(`  - ${link}`));
+
+      // Optionally trigger scanning of these extracted links
+      // You can feed them into handleServerAnalysis here if needed:
+      /*
+      await handleServerAnalysis(
+        data.links,
+        new URL(maliciousUrl).hostname,
+        null, // Let it use stored sessionId
+        null  // No specific tab to update
+      );
+      */
+      
+      return { success: true, links: data.links };
+    } else {
+      throw new Error("Invalid or empty link extraction response from server");
+    }
+
+  } catch (error) {
+    console.error("[DEVScan Background] Failed to extract links:", error);
+    return { success: false, error: error.message };
+  }
+}
+ 
+async function unshortenLink(shortUrl) {
+  try {
+    const { serverUrl } = await chrome.storage.sync.get("serverUrl");
+    const baseUrl = serverUrl || "http://localhost:3000";
+
+    const response = await fetch(`${baseUrl}/api/unshortened-links`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: shortUrl })
+    });
+
+    if (!response.ok) {
+      console.warn(`[DEVScan] Unshortener returned status ${response.status} → using original`);
+      return shortUrl;
+    }
+
+    const data = await response.json();
+    if (data && data.success && data.url) {
+      return data.url;
+    }
+
+    return shortUrl;
+  } catch (error) {
+    console.error(`[DEVScan] Unshortener failed for ${shortUrl}:`, error);
+    return shortUrl;
+  }
+}
+
 // ==============================
 // WARNING PAGE INTERACTION
 // ==============================
@@ -320,41 +385,103 @@ chrome.runtime.onMessage.addListener((message, sender) => {
 //   });
 // }
 
-// ==============================
-// CLICK-BASED MALICIOUS LINK INTERCEPTION
-// ==============================
-// Only intercepts when user clicks on links that were previously identified as malicious
 
-let maliciousUrls = new Set(); // Store URLs identified as malicious
+let maliciousUrls = new Set(); // Store Intercpted URLs identified as malicious
+const shortenedPatterns = [
+    'bit.ly',
+    't.co',
+    'tinyurl.com',
+    'goo.gl',
+    'is.gd',
+    'buff.ly',
+    'cutt.ly',
+    'ow.ly',
+    'rebrand.ly'
+  ];
 
-function interceptURL(url, details) {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === "allowOnce" && message.url) {
+    maliciousUrls.add(message.url);
+    setTimeout(() => maliciousUrls.delete(message.url), 60000);
+    sendResponse({ success: true });
+  }
+}); 
+
+
+
+async function interceptURL(url, details) {
   console.log("[DEVScan Intercepted] URL:", url);
 
+  // Hex Decoder of the intercepted link
   const decodedUrl = decodeURIComponent(url);
+  console.log("[DEVScan] Decoded URL:", decodedUrl);
+  
+  // Conditional link unshortening
+  try {
+    const parsedUrl = new URL(decodedUrl);
 
-  // Only intercept if this URL was previously identified as malicious
-  if (maliciousUrls.has(decodedUrl)) {
-    console.log("[DEVScan Intercepted] Blocking malicious URL:", decodedUrl);
-    
-    chrome.tabs.sendMessage(details.tabId, {
-      action: "redirectToWarningPage",
-      targetUrl: decodedUrl,
-      openerTabId: details.tabId
-    });
+    // Check if it's a shortened link and hasn't been unshortened already
+    if (shortenedPatterns.includes(parsedUrl.hostname) && !details._unshortened) {
+      const resolvedUrl = await unshortenLink(decodedUrl);
+      console.log("[DEVScan] Resolved shortened link →", resolvedUrl);
+
+      // Prevent reprocessing the same URL endlessly
+      details._unshortened = true;
+      return interceptURL(resolvedUrl, details);
+    }
+  } catch (e) {
+    console.warn("[DEVScan] URL parsing failed, using original:", decodedUrl, e);
+    return decodedUrl;
   }
-}
 
-// Function to add malicious URLs to the intercept list
-function addMaliciousUrl(url) {
-  maliciousUrls.add(url);
-  console.log("[DEVScan] Added malicious URL to intercept list:", url);
-}
+    
+    // Check if the URL is allowed to bypass the warning by the user
+    if (maliciousUrls.has(decodedUrl)) {
+      console.log("[DEVScan] URL allowed to bypass warning:", decodedUrl);
+      return;
+    }
 
-// Function to clear old malicious URLs (cleanup)
-function clearOldMaliciousUrls() {
-  maliciousUrls.clear();
-  console.log("[DEVScan] Cleared malicious URL intercept list");
-}
+    // Skip internal warning page to avoid infinite loops
+    if (decodedUrl.includes("html/WarningPage.html")) {
+      console.log("[DEVScan] Skipping internal warning page scan");
+      return;
+    }
+
+    let domain = "unknown";
+    try {
+      domain = new URL(decodedUrl).hostname;
+    } catch (err) {
+      console.warn("Invalid intercepted URL:", decodedUrl);
+    }
+
+    const { currentSessionId: existingSession } = await chrome.storage.sync.get("currentSessionId");
+    let currentSessionId = existingSession;
+      if (!currentSessionId) {
+        console.log("[DEVScan] No session — creating one...");
+        currentSessionId = await createNewScanSession();
+      }
+
+    const { verdict } = await handleSingleLinkAnalysis(decodedUrl, domain, currentSessionId, details.tabId);
+      if (verdict != "malicious") {
+        console.log("[DEVScan] Malicious verdict, redirecting...");
+        chrome.tabs.update(details.tabId, {
+          url: chrome.runtime.getURL(
+            `html/WarningPage.html?url=${encodeURIComponent(decodedUrl)}&openerTabId=${details.tabId}&fromDevScan=true&ts=${Date.now()}`
+          )
+        });
+
+        // const extractionResult = await handleExtractLinks(decodedUrl);
+        // if (extractionResult.success && extractionResult.links.length > 0) {
+        //   console.log(`[DEVScan Background] Scanning extracted links from ${decodedUrl}...`);
+        //   extractionResult.links.forEach(link => {
+        //     console.log(`  [Extracted Link] ${link}`);
+        //   });
+        // }
+      } else {
+        console.log(`[DEVScan Background] URL is safe: ${decodedUrl}`);
+      }
+    }
+ 
 
 chrome.webRequest.onBeforeRequest.addListener(
   (details) => {

@@ -136,12 +136,39 @@ function processLink(link) {
 // ==============================
 // LINK COLLECTION & BATCH PROCESSING
 // ==============================
+const shortenedPatterns = [
+    'bit.ly',
+    't.co',
+    'tinyurl.com',
+    'goo.gl',
+    'is.gd',
+    'buff.ly',
+    'cutt.ly',
+    'ow.ly',
+    'rebrand.ly'
+  ];
 
 // Collect links for analysis and manage batching to server
 function collectLinkForAnalysis(rawUrl) {
   try {
+    //Hex Decoder
     const decodedUrl = decodeURIComponent(rawUrl);
-    
+
+    //Url unshortener
+    try {
+      const parsedUrl = new URL(decodedUrl);
+
+      // Check if it's a shortened link
+      if (shortenedPatterns.includes(parsedUrl.hostname)) {
+        handleShortenedLink(decodedUrl); // Call the unshortener server
+        return; 
+      }
+    } catch (e) {
+        console.warn("[DEVScan] URL parsing failed, using original:", decodedUrl, e);
+        return decodedUrl; //return the original url if their is a error in the  unshortener server
+    }
+
+
     if (isSameDomain(decodedUrl, window.location.href)) return;
 
     // Check if this link was already processed or is being processed
@@ -382,12 +409,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   } else if (msg.action === "sessionUpdated") {
     currentSessionId = msg.sessionId;
     console.log("[DEVScan] Session updated:", currentSessionId);
-  } else if (msg.action === "redirectToWarningPage") {
-    const warningUrl = chrome.runtime.getURL(
-      `html/WarningPage.html?url=${encodeURIComponent(msg.targetUrl)}&openerTabId=${msg.openerTabId}`
-    );
-    console.log("[DEVScan] Redirecting to warning page:", warningUrl);
-    window.location.replace(warningUrl);
   }
 });
 

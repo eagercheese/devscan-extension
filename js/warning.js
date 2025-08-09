@@ -4,21 +4,34 @@ const openerTabId = parseInt(params.get("openerTabId"));
 
 document.getElementById("proceed-btn").onclick = () => {
   if (original) {
-    // Don't save anything. Always show warning on next click.
-    location.href = original; // still proceeds, but doesn't remember
+    chrome.runtime.sendMessage({ action: "allowOnce", url: original }, (response) => {
+      // Wait a tiny bit to ensure background script has time to update
+      setTimeout(() => {
+        location.href = original;
+      }, 250); // delay 
+    });
   }
 };
 
+
+
+
 document.getElementById("back-btn").onclick = () => {
   if (chrome.runtime && chrome.tabs && !isNaN(openerTabId)) {
-    chrome.runtime.sendMessage({ action: "closeAndSwitchBack", openerTabId }, (response) => {
-      if (chrome.runtime.lastError || response?.success === false) {
-        // Could not switch back — fallback to Google
+    chrome.tabs.query({}, (tabs) => {
+      if (tabs.length > 1) {
+        // Safe to close and switch
+        chrome.runtime.sendMessage({ action: "closeAndSwitchBack", openerTabId }, (response) => {
+          if (chrome.runtime.lastError || response?.success === false) {
+            window.location.href = "https://www.google.com";
+          }
+        });
+      } else {
+        // Only one tab — don't close, just redirect to safety page
         window.location.href = "https://www.google.com";
       }
     });
   } else {
-    // fallback: either no openerTabId or tabs API not available
     window.location.href = "https://www.google.com";
   }
 };
