@@ -367,25 +367,7 @@ chrome.runtime.onMessage.addListener((message, sender) => {
 // REDIRECT / MANUALLY INPUTED LINK INTERCEPTOR
 // ======================================================
 
-// function interceptURL(url, details) {
-//   console.log("[DEVScan Intercepted] URL:", url);
-
-//   const decodedUrl = decodeURIComponent(url);
-
-//   // Extract domain from URL
-//   let domain = "unknown";
-//   try {
-//     domain = new URL(decodedUrl).hostname;
-//   } catch (err) {
-//     console.warn("Invalid intercepted URL:", decodedUrl);
-//   }
-
-//   chrome.storage.sync.get("currentSessionId", ({ currentSessionId }) => {
-//     handleServerAnalysis([decodedUrl], domain, currentSessionId, details.tabId);
-//   });
-// }
-
-
+// Intercept URLs before they load to check if malicious
 let maliciousUrls = new Set(); // Store Intercpted URLs identified as malicious
 const shortenedPatterns = [
     'bit.ly',
@@ -399,6 +381,7 @@ const shortenedPatterns = [
     'rebrand.ly'
   ];
 
+// Allow once: user can allow a URL to bypass the warning if the proceed button is click
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === "allowOnce" && message.url) {
     maliciousUrls.add(message.url);
@@ -407,6 +390,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 }); 
 
+// Function to detect if URL is shortened and unshorten it recursively
+async function resolveShortenedUrl(url, details) {
+  try {
+    const parsedUrl = new URL(url);
+
+    if (shortenedPatterns.includes(parsedUrl.hostname) && !details._unshortened) {
+      const resolvedUrl = await unshortenLink(url);
+      console.log("[DEVScan] Resolved shortened link →", resolvedUrl);
+
+      // Mark as unshortened to avoid infinite recursion
+      details._unshortened = true;
+
+      // Recursively resolve again in case the resolved URL is also shortened
+      return resolveShortenedUrl(resolvedUrl, details);
+    }
+  } catch (e) {
+    console.warn("[DEVScan] URL parsing failed in unshorten step:", url, e);
+    return url;
+  }
+
+  // Return the original or resolved URL if no further unshortening needed
+  return url;
+}
 
 
 async function interceptURL(url, details) {
@@ -417,41 +423,26 @@ async function interceptURL(url, details) {
   console.log("[DEVScan] Decoded URL:", decodedUrl);
   
   // Conditional link unshortening
-  try {
-    const parsedUrl = new URL(decodedUrl);
-
-    // Check if it's a shortened link and hasn't been unshortened already
-    if (shortenedPatterns.includes(parsedUrl.hostname) && !details._unshortened) {
-      const resolvedUrl = await unshortenLink(decodedUrl);
-      console.log("[DEVScan] Resolved shortened link →", resolvedUrl);
-
-      // Prevent reprocessing the same URL endlessly
-      details._unshortened = true;
-      return interceptURL(resolvedUrl, details);
-    }
-  } catch (e) {
-    console.warn("[DEVScan] URL parsing failed, using original:", decodedUrl, e);
-    return decodedUrl;
-  }
+  const resolvedUrl = await resolveShortenedUrl(decodedUrl, details);
 
     
     // Check if the URL is allowed to bypass the warning by the user
-    if (maliciousUrls.has(decodedUrl)) {
-      console.log("[DEVScan] URL allowed to bypass warning:", decodedUrl);
+    if (maliciousUrls.has(resolvedUrl)) {
+      console.log("[DEVScan] URL allowed to bypass warning:", resolvedUrl);
       return;
     }
 
     // Skip internal warning page to avoid infinite loops
-    if (decodedUrl.includes("html/WarningPage.html")) {
+    if (resolvedUrl.includes("html/WarningPage.html")) {
       console.log("[DEVScan] Skipping internal warning page scan");
       return;
     }
 
     let domain = "unknown";
     try {
-      domain = new URL(decodedUrl).hostname;
+      domain = new URL(resolvedUrl).hostname;
     } catch (err) {
-      console.warn("Invalid intercepted URL:", decodedUrl);
+      console.warn("Invalid intercepted URL:", resolvedUrl);
     }
 
     const { currentSessionId: existingSession } = await chrome.storage.sync.get("currentSessionId");
@@ -461,12 +452,12 @@ async function interceptURL(url, details) {
         currentSessionId = await createNewScanSession();
       }
 
-    const { verdict } = await handleSingleLinkAnalysis(decodedUrl, domain, currentSessionId, details.tabId);
+    const { verdict } = await handleSingleLinkAnalysis(resolvedUrl, domain, currentSessionId, details.tabId);
       if (verdict != "malicious") {
         console.log("[DEVScan] Malicious verdict, redirecting...");
         chrome.tabs.update(details.tabId, {
           url: chrome.runtime.getURL(
-            `html/WarningPage.html?url=${encodeURIComponent(decodedUrl)}&openerTabId=${details.tabId}&fromDevScan=true&ts=${Date.now()}`
+            `html/WarningPage.html?url=${encodeURIComponent(resolvedUrl)}&openerTabId=${details.tabId}&fromDevScan=true&ts=${Date.now()}`
           )
         });
 
@@ -478,7 +469,7 @@ async function interceptURL(url, details) {
         //   });
         // }
       } else {
-        console.log(`[DEVScan Background] URL is safe: ${decodedUrl}`);
+        console.log(`[DEVScan Background] URL is safe: ${resolvedUrl}`);
       }
     }
  
