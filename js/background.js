@@ -9,23 +9,45 @@
 // EXTENSION LIFECYCLE EVENTS
 // ==============================
 
-// Initialize extension settings when first installed
-chrome.runtime.onInstalled.addListener(() => {
-  chrome.storage.sync.set({
-    enableBlocking: true,
-    showWarningsOnly: true,
-    logDetection: false,
-    suppressReminder: false, // Ensure this is initialized
-    serverUrl: "http://localhost:3000", // Default server URL
-    currentSessionId: null, // Track current session
+// Initialize extension settings when first installed / updated
+chrome.runtime.onInstalled.addListener((details) => {
+  // Always keep existing user prefs when possible—only set missing defaults
+  chrome.storage.sync.get(
+    ["enableBlocking", "showWarningsOnly", "logDetection", "suppressReminder", "serverUrl", "currentSessionId"],
+    (cur) => {
+      const defaults = {
+        enableBlocking: true,
+        showWarningsOnly: true,
+        logDetection: false,
+        suppressReminder: false, // initialize to false
+        serverUrl: "http://localhost:3000",
+        currentSessionId: null,
+      };
 
+      const toSet = {};
+      for (const [k, v] of Object.entries(defaults)) {
+        if (typeof cur[k] === "undefined") toSet[k] = v;
+      }
 
-  });
+      // Reset suppression on extension UPDATE so users see the reminder again
+      if (details.reason === "update") {
+        toSet.suppressReminder = false;
+        toSet.lastUpdate = Date.now();
+      }
+
+      if (Object.keys(toSet).length) {
+        chrome.storage.sync.set(toSet);
+      }
+    }
+  );
 });
 
 // Handle browser startup - create new scan session
 chrome.runtime.onStartup.addListener(() => {
   console.log("🌐 Browser started — checking toggle settings...");
+
+  // ✅ Reset the reminder suppression on *every* real browser start
+  chrome.storage.sync.set({ suppressReminder: false, lastStartup: Date.now() });
 
   // Create a new scan session when browser starts
   createNewScanSession();
@@ -55,13 +77,13 @@ async function createNewScanSession() {
   try {
     const { serverUrl } = await chrome.storage.sync.get("serverUrl");
     const baseUrl = serverUrl || "http://localhost:3000";
-    
+
     // Get browser info for session tracking
     const browserInfo = `Chrome Extension v4.0 - ${navigator.userAgent || 'Unknown Browser'}`;
     const engineVersion = "DEVSCAN-4.0";
-    
+
     console.log("[DEVScan Background] Creating new scan session...");
-    
+
     const response = await fetch(`${baseUrl}/api/scan-sessions`, {
       method: "POST",
       headers: {
@@ -72,19 +94,19 @@ async function createNewScanSession() {
         engineVersion
       })
     });
-    
+
     if (!response.ok) {
       throw new Error(`Failed to create session: ${response.status}`);
     }
-    
+
     const session = await response.json();
-    
+
     // Store session ID for use across all tabs
     await chrome.storage.sync.set({ currentSessionId: session.session_ID });
-    
+
     console.log(`[DEVScan Background] Created session: ${session.session_ID}`);
     return session.session_ID;
-    
+
   } catch (error) {
     console.error("[DEVScan Background] Failed to create scan session:", error);
     // Continue without session - will use individual link scanning
@@ -144,10 +166,10 @@ async function handleSingleLinkAnalysis(url, domain, providedSessionId, tabId) {
     // Get server URL and session ID from storage
     const { serverUrl, currentSessionId } = await chrome.storage.sync.get(["serverUrl", "currentSessionId"]);
     const baseUrl = serverUrl || "http://localhost:3000";
-    
+
     // Use provided session ID or fallback to stored one
     const sessionId = providedSessionId || currentSessionId;
-    
+
     console.log(`[DEVScan Background] Analyzing single link: ${url}`);
     console.log(`[DEVScan Background] Request payload:`, {
       links: [url],
@@ -156,7 +178,7 @@ async function handleSingleLinkAnalysis(url, domain, providedSessionId, tabId) {
       browserInfo: `Chrome Extension v4.0 - ${domain}`,
       singleLink: true
     });
-    
+
     const response = await fetch(`${baseUrl}/api/extension/analyze`, {
       method: "POST",
       headers: {
@@ -170,43 +192,43 @@ async function handleSingleLinkAnalysis(url, domain, providedSessionId, tabId) {
         singleLink: true // Flag to indicate individual analysis
       })
     });
-    
+
     if (!response.ok) {
       throw new Error(`Server responded with status: ${response.status}`);
     }
-    
+
     const result = await response.json();
     console.log(`[DEVScan Background] Server response:`, result);
-    
+
     if (result.success && result.verdicts) {
       console.log(`[DEVScan Background] Available verdicts:`, Object.keys(result.verdicts));
       console.log(`[DEVScan Background] Looking for URL:`, url);
-      
+
       // Try to find the verdict for this URL (exact match first)
       let verdict = result.verdicts[url];
-      
+
       if (!verdict) {
         // If exact match fails, try to find by partial match or URL variations
         console.log(`[DEVScan Background] No exact match for ${url}, checking variations...`);
-        
+
         for (const [responseUrl, responseVerdict] of Object.entries(result.verdicts)) {
           console.log(`[DEVScan Background] Comparing '${url}' with '${responseUrl}'`);
-          
+
           // Try decoding both URLs in case of encoding differences
           try {
             const decodedRequestUrl = decodeURIComponent(url);
             const decodedResponseUrl = decodeURIComponent(responseUrl);
-            
+
             if (decodedRequestUrl === decodedResponseUrl) {
               verdict = responseVerdict;
               console.log(`[DEVScan Background] Found match after URL decoding`);
               break;
             }
-            
+
             // Also try without query parameters
             const requestUrlBase = decodedRequestUrl.split('?')[0];
             const responseUrlBase = decodedResponseUrl.split('?')[0];
-            
+
             if (requestUrlBase === responseUrlBase) {
               verdict = responseVerdict;
               console.log(`[DEVScan Background] Found match ignoring query parameters`);
@@ -217,11 +239,11 @@ async function handleSingleLinkAnalysis(url, domain, providedSessionId, tabId) {
           }
         }
       }
-      
+
       if (verdict) {
         console.log(`[DEVScan Background] ✅ Received verdict for ${url}: ${verdict}`);
         console.log(`[DEVScan Background] 📤 Sending verdict to tab ${tabId}`);
-        
+
         // Send verdict directly to content script (it's already a string)
         chrome.tabs.sendMessage(tabId, {
           action: "updateSingleLinkVerdict",
@@ -237,7 +259,7 @@ async function handleSingleLinkAnalysis(url, domain, providedSessionId, tabId) {
       } else {
         console.error(`[DEVScan Background] ❌ No verdict found for ${url} in server response`);
         console.log(`[DEVScan Background] Available URLs:`, Object.keys(result.verdicts));
-        
+
         // Send unknown verdict
         chrome.tabs.sendMessage(tabId, {
           action: "updateSingleLinkVerdict",
@@ -245,20 +267,20 @@ async function handleSingleLinkAnalysis(url, domain, providedSessionId, tabId) {
           verdict: "unknown"
         });
       }
-      
+
       // Store session ID if provided by server
       if (result.session_ID) {
         await chrome.storage.sync.set({ currentSessionId: result.session_ID });
       }
-      
+
       // Add malicious URLs to intercept list for click-based blocking
       if (verdict === "malicious" || verdict === "danger") {
         addMaliciousUrl(url);
         console.log(`[DEVScan Background] 🚨 Added ${url} to malicious intercept list`);
       }
-      
+
       console.log(`[DEVScan Background] Single link verdict: ${url} → ${verdict.toUpperCase()}`);
-      
+
       return { 
         verdict: verdict, 
         sessionId: result.session_ID || sessionId 
@@ -266,7 +288,7 @@ async function handleSingleLinkAnalysis(url, domain, providedSessionId, tabId) {
     } else {
       throw new Error("Invalid response format from server");
     }
-    
+
   } catch (error) {
     console.error("[DEVScan Background] Single link analysis failed:", error);
     throw error;
@@ -300,17 +322,7 @@ async function handleExtractLinks(maliciousUrl) {
       console.log(`[DEVScan Background] Extracted ${data.links.length} links from ${maliciousUrl}:`);
       data.links.forEach(link => console.log(`  - ${link}`));
 
-      // Optionally trigger scanning of these extracted links
-      // You can feed them into handleServerAnalysis here if needed:
-      /*
-      await handleServerAnalysis(
-        data.links,
-        new URL(maliciousUrl).hostname,
-        null, // Let it use stored sessionId
-        null  // No specific tab to update
-      );
-      */
-      
+      // (Optional) You can scan these extracted links here if needed
       return { success: true, links: data.links };
     } else {
       throw new Error("Invalid or empty link extraction response from server");
@@ -321,7 +333,7 @@ async function handleExtractLinks(maliciousUrl) {
     return { success: false, error: error.message };
   }
 }
- 
+
 async function unshortenLink(shortUrl) {
   try {
     const { serverUrl } = await chrome.storage.sync.get("serverUrl");
@@ -370,16 +382,16 @@ chrome.runtime.onMessage.addListener((message, sender) => {
 // Intercept URLs before they load to check if malicious
 let maliciousUrls = new Set(); // Store Intercpted URLs identified as malicious
 const shortenedPatterns = [
-    'bit.ly',
-    't.co',
-    'tinyurl.com',
-    'goo.gl',
-    'is.gd',
-    'buff.ly',
-    'cutt.ly',
-    'ow.ly',
-    'rebrand.ly'
-  ];
+  'bit.ly',
+  't.co',
+  'tinyurl.com',
+  'goo.gl',
+  'is.gd',
+  'buff.ly',
+  'cutt.ly',
+  'ow.ly',
+  'rebrand.ly'
+];
 
 // Allow once: user can allow a URL to bypass the warning if the proceed button is click
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -388,7 +400,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     setTimeout(() => maliciousUrls.delete(message.url), 60000);
     sendResponse({ success: true });
   }
-}); 
+});
 
 // Function to detect if URL is shortened and unshorten it recursively
 async function resolveShortenedUrl(url, details) {
@@ -414,65 +426,58 @@ async function resolveShortenedUrl(url, details) {
   return url;
 }
 
-
 async function interceptURL(url, details) {
   console.log("[DEVScan Intercepted] URL:", url);
 
   // Hex Decoder of the intercepted link
   const decodedUrl = decodeURIComponent(url);
   console.log("[DEVScan] Decoded URL:", decodedUrl);
-  
+
   // Conditional link unshortening
   const resolvedUrl = await resolveShortenedUrl(decodedUrl, details);
 
-    
-    // Check if the URL is allowed to bypass the warning by the user
-    if (maliciousUrls.has(resolvedUrl)) {
-      console.log("[DEVScan] URL allowed to bypass warning:", resolvedUrl);
-      return;
-    }
+  // Check if the URL is allowed to bypass the warning by the user
+  if (maliciousUrls.has(resolvedUrl)) {
+    console.log("[DEVScan] URL allowed to bypass warning:", resolvedUrl);
+    return;
+  }
 
-    // Skip internal warning page to avoid infinite loops
-    if (resolvedUrl.includes("html/WarningPage.html")) {
-      console.log("[DEVScan] Skipping internal warning page scan");
-      return;
-    }
+  // Skip internal warning page to avoid infinite loops
+  if (resolvedUrl.includes("html/WarningPage.html")) {
+    console.log("[DEVScan] Skipping internal warning page scan");
+    return;
+  }
 
-    let domain = "unknown";
-    try {
-      domain = new URL(resolvedUrl).hostname;
-    } catch (err) {
-      console.warn("Invalid intercepted URL:", resolvedUrl);
-    }
+  let domain = "unknown";
+  try {
+    domain = new URL(resolvedUrl).hostname;
+  } catch (err) {
+    console.warn("Invalid intercepted URL:", resolvedUrl);
+  }
 
-    const { currentSessionId: existingSession } = await chrome.storage.sync.get("currentSessionId");
-    let currentSessionId = existingSession;
-      if (!currentSessionId) {
-        console.log("[DEVScan] No session — creating one...");
-        currentSessionId = await createNewScanSession();
-      }
+  const { currentSessionId: existingSession } = await chrome.storage.sync.get("currentSessionId");
+  let currentSessionId = existingSession;
+  if (!currentSessionId) {
+    console.log("[DEVScan] No session — creating one...");
+    currentSessionId = await createNewScanSession();
+  }
 
-    const { verdict } = await handleSingleLinkAnalysis(resolvedUrl, domain, currentSessionId, details.tabId);
-      if (verdict != "malicious") {
-        console.log("[DEVScan] Malicious verdict, redirecting...");
-        chrome.tabs.update(details.tabId, {
-          url: chrome.runtime.getURL(
-            `html/WarningPage.html?url=${encodeURIComponent(resolvedUrl)}&openerTabId=${details.tabId}&fromDevScan=true&ts=${Date.now()}`
-          )
-        });
+  const { verdict } = await handleSingleLinkAnalysis(resolvedUrl, domain, currentSessionId, details.tabId);
 
-        // const extractionResult = await handleExtractLinks(decodedUrl);
-        // if (extractionResult.success && extractionResult.links.length > 0) {
-        //   console.log(`[DEVScan Background] Scanning extracted links from ${decodedUrl}...`);
-        //   extractionResult.links.forEach(link => {
-        //     console.log(`  [Extracted Link] ${link}`);
-        //   });
-        // }
-      } else {
-        console.log(`[DEVScan Background] URL is safe: ${resolvedUrl}`);
-      }
-    }
- 
+  // 🔒 Fix logic: redirect when verdict is malicious/danger/anomalous/warning
+  if (verdict === "malicious" || verdict === "danger" || verdict === "anomalous" || verdict === "warning") {
+    console.log("[DEVScan] Risky verdict, redirecting to warning page...");
+    chrome.tabs.update(details.tabId, {
+      url: chrome.runtime.getURL(
+        `html/WarningPage.html?url=${encodeURIComponent(resolvedUrl)}&openerTabId=${details.tabId}&fromDevScan=true&ts=${Date.now()}`
+      )
+    });
+    // (Optional) Extract links
+    // const extractionResult = await handleExtractLinks(resolvedUrl);
+  } else {
+    console.log(`[DEVScan Background] URL appears safe: ${resolvedUrl}`);
+  }
+}
 
 chrome.webRequest.onBeforeRequest.addListener(
   (details) => {

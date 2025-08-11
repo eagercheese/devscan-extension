@@ -8,6 +8,7 @@ body {
   box-sizing: border-box;
 }
 
+/* Generic card (kept if you want to reuse later) */
 .card {
   background: #ffffff;
   color: #222;
@@ -18,17 +19,38 @@ body {
   margin-bottom: 15px;
 }
 
-.logo {
-  width: 40px;
-  vertical-align: middle;
-  margin-right: 10px;
+/* Dedicated header card (avoids double padding from nested .card) */
+.header-card {
+  background: #ffffff;
+  color: #222;
+  border-radius: 12px;
+  padding: 14px 16px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.22);
+  margin-bottom: 14px;
 }
 
+/* Logo row */
+.logo-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Crisp icon sizing/alignment */
+.logo-img {
+  max-width: 100%;
+  max-height: 50px; /* Adjust height to fit nicely in the box */
+  height: auto; /* Keep aspect ratio */
+  object-fit: contain;
+}
+
+/* Old h1 not used but safe to keep */
 h1 {
   font-size: 20px;
   margin: 0;
 }
 
+/* Toggles */
 .toggle-row {
   display: flex;
   align-items: center;
@@ -40,6 +62,7 @@ h1 {
   color: #222;
 }
 
+/* Footer + quote */
 .footer {
   text-align: center;
   font-size: 11px;
@@ -55,6 +78,7 @@ h1 {
   margin-top: 10px;
 }
 
+/* Switches */
 input[type="checkbox"] {
   width: 40px;
   height: 20px;
@@ -86,6 +110,7 @@ input[type="checkbox"]:checked::before {
   transform: translateX(20px);
 }
 
+/* Server box */
 .server-config {
   background: #f0f0f0;
   border-radius: 8px;
