@@ -1,8 +1,6 @@
 const iconUrls = {
-  danger: chrome.runtime.getURL("css/picture/caution_mark_red.png"),
-  warning: chrome.runtime.getURL("css/picture/caution_exclamation.png"),
-  malicious: chrome.runtime.getURL("css/picture/caution_mark_red.png"), // Same as danger
-  anomalous: chrome.runtime.getURL("css/picture/caution_exclamation.png"), // Same as warning
+  malicious: chrome.runtime.getURL("css/picture/caution_mark_red.png"),
+  anomalous: chrome.runtime.getURL("css/picture/caution_exclamation.png"),
   safe: chrome.runtime.getURL("css/picture/caution_mark_green.png"),
   failed: chrome.runtime.getURL("css/picture/exclamationMark.png"),
   scanning: chrome.runtime.getURL("css/picture/warning_exclamation.png"),
@@ -29,15 +27,6 @@ const iconUrls = {
   document.body.appendChild(host);
 
   const styles = {
-    danger: {
-      label: "WARNING!",
-      subtext: "Malicious Link Detected",
-      mainTitle: "HIGH RISK",
-      description:
-        "This page has been identified as containing malicious content with a high probability of phishing or harmful behavior. Continuing may compromise your security.",
-      background: "#b80f0a",
-      titleColor: "#b80f0a",
-    },
     malicious: {
       label: "MALICIOUS!",
       subtext: "Threat Detected",
@@ -46,15 +35,6 @@ const iconUrls = {
         "Our AI security system has identified this link as malicious. This content may attempt to steal your information, install malware, or perform other harmful actions.",
       background: "#c41e3a",
       titleColor: "#c41e3a",
-    },
-    warning: {
-      label: "CAUTION",
-      subtext: "Anomaly Detected",
-      mainTitle: "POSSIBLE RISK",
-      description:
-        "This page may exhibit suspicious traits or behaviors that resemble phishing or malware activity. It is recommended to proceed with caution.",
-      background: "#f4b400",
-      titleColor: "#e2960a",
     },
     anomalous: {
       label: "SUSPICIOUS",

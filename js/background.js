@@ -44,28 +44,11 @@ chrome.runtime.onInstalled.addListener((details) => {
 
 // Handle browser startup - create new scan session
 chrome.runtime.onStartup.addListener(() => {
-  console.log("🌐 Browser started — checking toggle settings...");
-
-  // ✅ Reset the reminder suppression on *every* real browser start
+  // Reset the reminder suppression on *every* real browser start
   chrome.storage.sync.set({ suppressReminder: false, lastStartup: Date.now() });
 
   // Create a new scan session when browser starts
   createNewScanSession();
-
-  // All UI is handled via reminder.js (floating reminder injected)
-  chrome.storage.sync.get(
-    ["enableBlocking", "showWarningsOnly", "suppressReminder"],
-    (data) => {
-      const { enableBlocking, showWarningsOnly, suppressReminder } = data;
-
-      console.log("Startup check:");
-      console.log("  enableBlocking:", enableBlocking);
-      console.log("  showWarningsOnly:", showWarningsOnly);
-      console.log("  suppressReminder:", suppressReminder);
-
-      // These values will be used by reminder.js which runs on all pages
-    }
-  );
 });
 
 // ==============================
@@ -81,8 +64,6 @@ async function createNewScanSession() {
     // Get browser info for session tracking
     const browserInfo = `Chrome Extension v4.0 - ${navigator.userAgent || 'Unknown Browser'}`;
     const engineVersion = "DEVSCAN-4.0";
-
-    console.log("[DEVScan Background] Creating new scan session...");
 
     const response = await fetch(`${baseUrl}/api/scan-sessions`, {
       method: "POST",
@@ -104,7 +85,6 @@ async function createNewScanSession() {
     // Store session ID for use across all tabs
     await chrome.storage.sync.set({ currentSessionId: session.session_ID });
 
-    console.log(`[DEVScan Background] Created session: ${session.session_ID}`);
     return session.session_ID;
 
   } catch (error) {
@@ -121,6 +101,11 @@ async function createNewScanSession() {
 
 // Handle messages from content scripts and popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === "test") {
+    sendResponse({ success: true, reply: "Background script is working!" });
+    return true;
+  }
+  
   if (message.action === "openWarningTab" && message.targetUrl) {
     // Open warning page for risky links
     const warningUrl = chrome.runtime.getURL(
@@ -128,13 +113,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         message.targetUrl
       )}&openerTabId=${sender.tab.id}`
     );
-
+    
     chrome.tabs.create({
       url: warningUrl,
       index: sender.tab.index + 1,
       openerTabId: sender.tab.id,
+    }, (tab) => {
+      if (chrome.runtime.lastError) {
+        console.error(`[DEVScan Background] Error creating tab:`, chrome.runtime.lastError);
+        sendResponse({ success: false, error: chrome.runtime.lastError.message });
+      } else {
+        sendResponse({ success: true, tabId: tab.id });
+      }
     });
-  } else if (message.action === "analyzeSingleLink") {
+    return true; // Keep message channel open for async response
+  } 
+  
+  else if (message.action === "analyzeSingleLink") {
     // Handle individual link analysis for immediate verdict delivery
     handleSingleLinkAnalysis(message.url, message.domain, message.sessionId, sender.tab.id)
       .catch(error => {
@@ -147,13 +142,30 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
       });
     // Don't use sendResponse - use direct messaging instead
-  } else if (message.action === "createSession") {
+  } 
+  
+  else if (message.action === "createSession") {
     // Allow content scripts to request session creation
     createNewScanSession()
       .then(sessionId => sendResponse({ success: true, sessionId }))
       .catch(error => sendResponse({ success: false, error: error.message }));
     return true; // Keep message channel open for async response
-  } 
+  }
+  
+  else if (message.action === "allowOnce" && message.url) {
+    maliciousUrls.add(message.url);
+    setTimeout(() => maliciousUrls.delete(message.url), 60000);
+    sendResponse({ success: true });
+    return true;
+  }
+  
+  else if (message.action === "closeAndSwitchBack" && sender.tab?.id) {
+    chrome.tabs.remove(sender.tab.id, () => {
+      chrome.tabs.update(message.openerTabId, { active: true });
+    });
+    sendResponse({ success: true });
+    return true;
+  }
 });
 
 // ==============================
@@ -169,15 +181,6 @@ async function handleSingleLinkAnalysis(url, domain, providedSessionId, tabId) {
 
     // Use provided session ID or fallback to stored one
     const sessionId = providedSessionId || currentSessionId;
-
-    console.log(`[DEVScan Background] Analyzing single link: ${url}`);
-    console.log(`[DEVScan Background] Request payload:`, {
-      links: [url],
-      domain: domain,
-      sessionId: sessionId,
-      browserInfo: `Chrome Extension v4.0 - ${domain}`,
-      singleLink: true
-    });
 
     const response = await fetch(`${baseUrl}/api/extension/analyze`, {
       method: "POST",
@@ -198,21 +201,26 @@ async function handleSingleLinkAnalysis(url, domain, providedSessionId, tabId) {
     }
 
     const result = await response.json();
-    console.log(`[DEVScan Background] Server response:`, result);
 
     if (result.success && result.verdicts) {
-      console.log(`[DEVScan Background] Available verdicts:`, Object.keys(result.verdicts));
-      console.log(`[DEVScan Background] Looking for URL:`, url);
-
       // Try to find the verdict for this URL (exact match first)
       let verdict = result.verdicts[url];
 
       if (!verdict) {
         // If exact match fails, try to find by partial match or URL variations
-        console.log(`[DEVScan Background] No exact match for ${url}, checking variations...`);
-
         for (const [responseUrl, responseVerdict] of Object.entries(result.verdicts)) {
-          console.log(`[DEVScan Background] Comparing '${url}' with '${responseUrl}'`);
+          // Simple string equality
+          if (url === responseUrl) {
+            verdict = responseVerdict;
+            break;
+          }
+
+          // Try normalized comparison (remove trailing slashes, etc.)
+          const normalizeUrl = (u) => u.replace(/\/+$/, '').toLowerCase();
+          if (normalizeUrl(url) === normalizeUrl(responseUrl)) {
+            verdict = responseVerdict;
+            break;
+          }
 
           // Try decoding both URLs in case of encoding differences
           try {
@@ -221,7 +229,6 @@ async function handleSingleLinkAnalysis(url, domain, providedSessionId, tabId) {
 
             if (decodedRequestUrl === decodedResponseUrl) {
               verdict = responseVerdict;
-              console.log(`[DEVScan Background] Found match after URL decoding`);
               break;
             }
 
@@ -231,19 +238,15 @@ async function handleSingleLinkAnalysis(url, domain, providedSessionId, tabId) {
 
             if (requestUrlBase === responseUrlBase) {
               verdict = responseVerdict;
-              console.log(`[DEVScan Background] Found match ignoring query parameters`);
               break;
             }
           } catch (e) {
-            console.log(`[DEVScan Background] Error decoding URLs:`, e);
+            // Silent error handling for URL decoding
           }
         }
       }
 
       if (verdict) {
-        console.log(`[DEVScan Background] ✅ Received verdict for ${url}: ${verdict}`);
-        console.log(`[DEVScan Background] 📤 Sending verdict to tab ${tabId}`);
-
         // Send verdict directly to content script (it's already a string)
         chrome.tabs.sendMessage(tabId, {
           action: "updateSingleLinkVerdict",
@@ -251,20 +254,17 @@ async function handleSingleLinkAnalysis(url, domain, providedSessionId, tabId) {
           verdict: verdict // Send the string verdict directly
         }, (response) => {
           if (chrome.runtime.lastError) {
-            console.error(`[DEVScan Background] ❌ Failed to send message to tab ${tabId}:`, chrome.runtime.lastError);
-          } else {
-            console.log(`[DEVScan Background] ✅ Successfully sent verdict to tab ${tabId}, response:`, response);
+            console.error(`[DEVScan Background] Failed to send message to tab ${tabId}:`, chrome.runtime.lastError);
           }
         });
       } else {
-        console.error(`[DEVScan Background] ❌ No verdict found for ${url} in server response`);
-        console.log(`[DEVScan Background] Available URLs:`, Object.keys(result.verdicts));
+        console.error(`[DEVScan Background] No verdict found for ${url} in server response`);
 
         // Send unknown verdict
         chrome.tabs.sendMessage(tabId, {
           action: "updateSingleLinkVerdict",
           url: url,
-          verdict: "unknown"
+          verdict: "failed"
         });
       }
 
@@ -274,12 +274,9 @@ async function handleSingleLinkAnalysis(url, domain, providedSessionId, tabId) {
       }
 
       // Add malicious URLs to intercept list for click-based blocking
-      if (verdict === "malicious" || verdict === "danger") {
+      if (verdict === "malicious" || verdict === "anomalous") {
         addMaliciousUrl(url);
-        console.log(`[DEVScan Background] 🚨 Added ${url} to malicious intercept list`);
       }
-
-      console.log(`[DEVScan Background] Single link verdict: ${url} → ${verdict.toUpperCase()}`);
 
       return { 
         verdict: verdict, 
@@ -301,8 +298,6 @@ async function handleExtractLinks(maliciousUrl) {
     const { serverUrl } = await chrome.storage.sync.get("serverUrl");
     const baseUrl = serverUrl || "http://localhost:3000";
 
-    console.log(`[DEVScan Background] Extracting links from: ${maliciousUrl}`);
-
     // Call the extract-links endpoint
     const response = await fetch(`${baseUrl}/api/extract-links`, {
       method: "POST",
@@ -319,10 +314,6 @@ async function handleExtractLinks(maliciousUrl) {
     const data = await response.json();
 
     if (data.success && Array.isArray(data.links)) {
-      console.log(`[DEVScan Background] Extracted ${data.links.length} links from ${maliciousUrl}:`);
-      data.links.forEach(link => console.log(`  - ${link}`));
-
-      // (Optional) You can scan these extracted links here if needed
       return { success: true, links: data.links };
     } else {
       throw new Error("Invalid or empty link extraction response from server");
@@ -366,21 +357,8 @@ async function unshortenLink(shortUrl) {
 // WARNING PAGE INTERACTION
 // ==============================
 
-// Handle close-and-return from warning page
-chrome.runtime.onMessage.addListener((message, sender) => {
-  if (message.action === "closeAndSwitchBack" && sender.tab?.id) {
-    chrome.tabs.remove(sender.tab.id, () => {
-      chrome.tabs.update(message.openerTabId, { active: true });
-    });
-  }
-});
-
-// ======================================================
-// REDIRECT / MANUALLY INPUTED LINK INTERCEPTOR
-// ======================================================
-
 // Intercept URLs before they load to check if malicious
-let maliciousUrls = new Set(); // Store Intercpted URLs identified as malicious
+let maliciousUrls = new Set(); // Store intercepted URLs identified as malicious
 const shortenedPatterns = [
   'bit.ly',
   't.co',
@@ -393,14 +371,11 @@ const shortenedPatterns = [
   'rebrand.ly'
 ];
 
-// Allow once: user can allow a URL to bypass the warning if the proceed button is click
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === "allowOnce" && message.url) {
-    maliciousUrls.add(message.url);
-    setTimeout(() => maliciousUrls.delete(message.url), 60000);
-    sendResponse({ success: true });
-  }
-});
+// Function to add malicious URLs to intercept list
+function addMaliciousUrl(url) {
+  maliciousUrls.add(url);
+  console.log(`[DEVScan Background] Added ${url} to malicious intercept list`);
+}
 
 // Function to detect if URL is shortened and unshorten it recursively
 async function resolveShortenedUrl(url, details) {
@@ -464,8 +439,8 @@ async function interceptURL(url, details) {
 
   const { verdict } = await handleSingleLinkAnalysis(resolvedUrl, domain, currentSessionId, details.tabId);
 
-  // 🔒 Fix logic: redirect when verdict is malicious/danger/anomalous/warning
-  if (verdict === "malicious" || verdict === "danger" || verdict === "anomalous" || verdict === "warning") {
+  // Fix logic: redirect when verdict is malicious or anomalous
+  if (verdict === "malicious" || verdict === "anomalous") {
     console.log("[DEVScan] Risky verdict, redirecting to warning page...");
     chrome.tabs.update(details.tabId, {
       url: chrome.runtime.getURL(

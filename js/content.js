@@ -5,10 +5,7 @@
 // Monitors web pages for external links and processes them through the security pipeline
 // Handles dynamic content, prevents duplicate processing, and manages user interactions
 
-/* MAS PINA AYOS YUNG MGA MODULES */
-
-console.log("[DEVScan] 🚀 Content script loaded on:", window.location.href);
-console.log("[DEVScan] 🔍 Script version: 4.0");
+console.log("[DEVScan] Content script loaded on:", window.location.href);
 
 // ==============================
 // GLOBAL STATE MANAGEMENT (MOVED TO TOP)
@@ -29,13 +26,6 @@ let pageLoadTime = Date.now();                    // Track when page loaded
 // ==============================
 // INITIALIZATION & SESSION MANAGEMENT
 // ==============================
-
-// Initialize settings from extension storage
-if (typeof watchBlockingSetting === 'function') {
-  watchBlockingSetting();
-} else {
-  console.warn('[DEVScan] ⚠️ watchBlockingSetting function not available');
-}
 
 // Detect if this is a page refresh or new navigation
 const navigationEntry = performance.getEntriesByType('navigation')[0];
@@ -73,6 +63,25 @@ const selectors = [
     "[onclick*='http']",
     "[data-href]"
   ];
+
+// ==============================
+// SETTINGS CACHE
+// ==============================
+let blockingEnabled = true; // Default value
+
+// Load blocking setting on page load
+chrome.storage.sync.get("enableBlocking", ({ enableBlocking }) => {
+  blockingEnabled = enableBlocking ?? true;
+  console.log(`[DEVScan] 🔧 Blocking enabled: ${blockingEnabled}`);
+});
+
+// Listen for setting changes
+chrome.storage.onChanged.addListener((changes) => {
+  if (changes.enableBlocking) {
+    blockingEnabled = changes.enableBlocking.newValue ?? true;
+    console.log(`[DEVScan] 🔧 Blocking setting changed to: ${blockingEnabled}`);
+  }
+});
 
 // ==============================
 // LINK PROCESSING ENGINE
@@ -115,22 +124,8 @@ function processLink(link) {
   attachRiskTooltip(link, riskLevel);
   link.dataset.devscanRisk = riskLevel; // Store the determined risk on the element for click handling
 
-   // Create click handler that ONLY opens warning page for malicious links
-  const clickHandler = (e) => {
-    const storedRisk = link.dataset.devscanRisk || "safe";
-    if (storedRisk === "malicious" || storedRisk === "danger") {
-      e.preventDefault();
-      e.stopPropagation();
-      chrome.runtime.sendMessage({
-        action: "openWarningTab",
-        targetUrl: link.href,
-      });
-    }
-  };
-
-  // Attach click handler to intercept clicks on risky links
-  link.__devscanHandlerAttached = clickHandler;
-  link.addEventListener("click", clickHandler);
+  // Attach click handler using the new function
+  attachClickHandler(link);
 }
 
 // ==============================
@@ -168,19 +163,23 @@ function collectLinkForAnalysis(rawUrl) {
         return decodedUrl; //return the original url if their is a error in the  unshortener server
     }
 
-
     if (isSameDomain(decodedUrl, window.location.href)) return;
 
-    // Check if this link was already processed or is being processed
-    if (!collectedLinks.has(decodedUrl) && !pageProcessedLinks.has(decodedUrl)) {
-      collectedLinks.add(decodedUrl);
-      pageProcessedLinks.add(decodedUrl); // Mark as being processed
-
-      console.log("[DEVScan] Analyzing link immediately:", decodedUrl);
-      
-      // Send individual link for immediate analysis
-      analyzeSingleLink(decodedUrl);
+    // ENHANCED DEDUPLICATION: Check multiple conditions
+    const isAlreadyCollected = collectedLinks.has(decodedUrl);
+    const isAlreadyProcessed = pageProcessedLinks.has(decodedUrl);
+    const hasExistingVerdict = linkVerdicts.has(decodedUrl);
+    
+    if (isAlreadyCollected || isAlreadyProcessed || hasExistingVerdict) {
+      return;
     }
+
+    // Mark as being processed before sending request
+    collectedLinks.add(decodedUrl);
+    pageProcessedLinks.add(decodedUrl);
+    
+    // Send individual link for immediate analysis
+    analyzeSingleLink(decodedUrl);
   } catch (e) {
     console.warn("[DEVScan] Failed to decode URL:", rawUrl, e);
   }
@@ -189,9 +188,6 @@ function collectLinkForAnalysis(rawUrl) {
 // Analyze a single link immediately
 function analyzeSingleLink(url) {
   const currentDomain = window.location.hostname;
-  
-  console.log(`[DEVScan] 📤 Sending single link for analysis: ${url}`);
-  console.log(`[DEVScan] 🔍 URL length: ${url.length}, Domain: ${currentDomain}`);
   
   chrome.runtime.sendMessage({
     action: "analyzeSingleLink",
@@ -218,52 +214,98 @@ function isSameDomain(url1, url2) {
 }
 // Update tooltip display for a specific URL with new verdict
 function updateLinkTooltip(url, verdict) {
-  console.log(`[DEVScan] 🔄 Updating tooltip for ${url} with verdict: ${verdict}`);
-  console.log(`[DEVScan] 🔍 URL to match: "${url}" (length: ${url.length})`);
-  
-  const links = document.querySelectorAll(`a[href="${url}"]`);
-  console.log(`[DEVScan] 🔍 Found ${links.length} elements with exact href match`);
+  // Try multiple selection approaches
+  let links = document.querySelectorAll(`a[href="${url}"]`);
   
   if (links.length === 0) {
-    // Log all hrefs on the page to debug URL matching
-    const allLinks = document.querySelectorAll('a[href]');
-    console.log(`[DEVScan] 🔍 Total links on page: ${allLinks.length}`);
-    
-    // Check for partial matches
-    const partialMatches = Array.from(allLinks).filter(link => link.href.includes(url) || url.includes(link.href));
-    console.log(`[DEVScan] 🔍 Found ${partialMatches.length} partial matches`);
-    
-    if (partialMatches.length > 0) {
-      console.log(`[DEVScan] 🔍 Partial match examples:`, partialMatches.slice(0, 3).map(link => link.href));
-    }
-    
-    // Try alternative URL matching approaches
-    const encodedUrl = encodeURI(url);
-    const alternativeLinks = document.querySelectorAll(`a[href="${encodedUrl}"]`);
-    console.log(`[DEVScan] 🔍 Found ${alternativeLinks.length} elements with encoded URL: "${encodedUrl}"`);
-    
-    if (alternativeLinks.length === 0) {
-      console.warn(`[DEVScan] ⚠️ No elements found for URL: ${url}`);
-      return;
-    }
-    
-    alternativeLinks.forEach((link) => {
-      delete link.dataset.tooltipBound;
-      delete link.dataset.devscanStyled;
-      link.dataset.devscanRisk = verdict;
-      attachRiskTooltip(link, verdict);
-      console.log(`[DEVScan] ✅ Updated alternative link with verdict: ${verdict}`);
-    });
-    return;
+    // Try with escaped quotes
+    const escapedUrl = url.replace(/"/g, '\\"');
+    links = document.querySelectorAll(`a[href="${escapedUrl}"]`);
   }
   
+  if (links.length === 0) {
+    // Try finding links by iterating through all links
+    const allLinks = document.querySelectorAll('a[href]');
+    
+    const matchingLinks = [];
+    allLinks.forEach(link => {
+      const linkHref = link.href;
+      
+      // Direct comparison
+      if (linkHref === url) {
+        matchingLinks.push(link);
+        return;
+      }
+      
+      // Normalized comparison (remove trailing slash, case insensitive)
+      const normalizeUrl = (u) => u.replace(/\/+$/, '').toLowerCase();
+      if (normalizeUrl(linkHref) === normalizeUrl(url)) {
+        matchingLinks.push(link);
+        return;
+      }
+      
+      // URL without query parameters
+      const linkBase = linkHref.split('?')[0];
+      const urlBase = url.split('?')[0];
+      if (linkBase === urlBase) {
+        matchingLinks.push(link);
+        return;
+      }
+    });
+    
+    links = matchingLinks;
+  }
+  
+  if (links.length === 0) {
+    return false;
+  }
+  
+  let updateCount = 0;
   links.forEach((link) => {
     delete link.dataset.tooltipBound;
     delete link.dataset.devscanStyled;
     link.dataset.devscanRisk = verdict;
     attachRiskTooltip(link, verdict);
-    console.log(`[DEVScan] ✅ Updated link with verdict: ${verdict}`);
+    
+    // Reattach click handler with updated verdict
+    attachClickHandler(link);
+    
+    updateCount++;
   });
+  
+  return updateCount > 0;
+}
+
+// Separate function to attach click handlers - ADDED THIS FUNCTION
+function attachClickHandler(link) {
+  // Remove existing handler if any
+  if (link.__devscanHandlerAttached) {
+    link.removeEventListener("click", link.__devscanHandlerAttached);
+  }
+  
+  // Create new click handler that opens warning page for risky links
+  const clickHandler = (e) => {
+    const storedRisk = link.dataset.devscanRisk || "safe";
+    
+    if (storedRisk === "malicious" || storedRisk === "anomalous") {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      if (blockingEnabled) {
+        chrome.runtime.sendMessage({
+          action: "openWarningTab",
+          targetUrl: link.href,
+        });
+      } else {
+        // If blocking is disabled, navigate to the link normally
+        window.location.href = link.href;
+      }
+    }
+  };
+
+  // Attach click handler to intercept clicks on risky links
+  link.__devscanHandlerAttached = clickHandler;
+  link.addEventListener("click", clickHandler);
 }
 
 
@@ -275,25 +317,10 @@ function updateLinkTooltip(url, verdict) {
 
 function scanLinks() {
   const links = document.querySelectorAll(selectors.join(","));
-  console.log(`[DEVScan] 🔍 Found ${links.length} total links on page`);
-  
-  let externalCount = 0;
-  let internalCount = 0;
   
   links.forEach(link => {
-    if (link.href) {
-      const isInternal = isSameDomain(link.href, window.location.href);
-      if (isInternal) {
-        internalCount++;
-      } else {
-        externalCount++;
-        console.log(`[DEVScan] 🌐 Processing external link: ${link.href}`);
-      }
-    }
     processLink(link);
   });
-  
-  console.log(`[DEVScan] 📊 Link summary: ${externalCount} external, ${internalCount} internal`);
 }
 
 // ==============================
@@ -305,7 +332,6 @@ let scanTimeout = null;
 // Unified DOM observer for dynamic content and initial scan
 function startDOMObserver() {
   console.log("[DEVScan] 🔧 Starting DOM observer...");
-  
   const observer = new MutationObserver(mutations => {
     let hasNewLinks = false;
     
@@ -315,7 +341,6 @@ function startDOMObserver() {
           if (node.nodeType === Node.ELEMENT_NODE) {
             // Check if the node itself matches any selector
             if (node.matches && selectors.some(sel => node.matches(sel))) {
-              console.log("[DEVScan] 📎 Found new link element:", node.href || node.src);
               processLink(node);
               hasNewLinks = true;
               return;
@@ -325,7 +350,6 @@ function startDOMObserver() {
             if (node.querySelectorAll) {
               const matches = node.querySelectorAll(selectors.join(","));
               if (matches.length > 0) {
-                console.log("[DEVScan] 📎 Found", matches.length, "new link elements");
                 matches.forEach(link => processLink(link));
                 hasNewLinks = true;
               }
@@ -339,7 +363,6 @@ function startDOMObserver() {
       // Debounce additional scans to avoid excessive processing
       if (scanTimeout) clearTimeout(scanTimeout);
       scanTimeout = setTimeout(() => {
-        console.log("[DEVScan] New links detected, rescanning...");
         scanLinks();
       }, 300);
     }
@@ -353,11 +376,7 @@ function startDOMObserver() {
   });
 
   // Initial scan
-  console.log("[DEVScan] 🔍 Starting initial page scan...");
-  const startTime = performance.now();
   scanLinks();
-  const endTime = performance.now();
-  console.log(`[DEVScan] ⏱️ Initial scan completed in ${(endTime - startTime).toFixed(2)}ms`);
 }
 
 // ==============================
@@ -366,28 +385,19 @@ function startDOMObserver() {
 
 // Listen for messages from background script and other extension components
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  console.log(`[DEVScan] 📨 Received message:`, msg);
-  
   if (msg.action === "showToast") {
     showToast(msg.message, msg.type);
   } else if (msg.action === "updateSingleLinkVerdict") {
     // Handle individual link verdict updates for immediate feedback
     const { url, verdict } = msg;
     
-    console.log(`[DEVScan] 📥 Received immediate verdict: ${url} → ${verdict.toUpperCase()}`);
-    console.log(`[DEVScan] Current linkVerdicts size:`, linkVerdicts.size);
-    console.log(`[DEVScan] Current collectedLinks size:`, collectedLinks.size);
-    
     // Store the verdict and update tooltip
     linkVerdicts.set(url, verdict);
-    console.log(`[DEVScan] Stored verdict in linkVerdicts map`);
     
     const updateSuccess = updateLinkTooltip(url, verdict);
-    console.log(`[DEVScan] Tooltip update result:`, updateSuccess);
     
     // Clean up processing state
     collectedLinks.delete(url);
-    console.log(`[DEVScan] Cleaned up collectedLinks`);
     
     // Send response back to background script
     if (sendResponse) {
@@ -408,7 +418,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     sendResponse({ success: true });
   } else if (msg.action === "sessionUpdated") {
     currentSessionId = msg.sessionId;
-    console.log("[DEVScan] Session updated:", currentSessionId);
   }
 });
 
@@ -441,7 +450,6 @@ window.addEventListener('load', () => {
   if (sessionStorage.getItem('devscan_page_refresh') === 'true') {
     pageRefreshDetected = true;
     sessionStorage.removeItem('devscan_page_refresh');
-    console.log('[DEVScan] Page refresh detected via beforeunload');
   }
 });
 
@@ -459,7 +467,6 @@ setInterval(() => {
     entries.slice(-500).forEach(([url, verdict]) => {
       linkVerdicts.set(url, verdict);
     });
-    console.log("[DEVScan] Cleaned up verdicts cache, kept 500 most recent");
   }
   
   // Clear page processed links if we have too many (keep last 500)
@@ -470,7 +477,6 @@ setInterval(() => {
     linksArray.slice(-250).forEach(url => {
       pageProcessedLinks.add(url);
     });
-    console.log("[DEVScan] Cleaned up page processed links cache, kept 250 most recent");
   }
 }, 30000); // Run every 30 seconds
 
@@ -498,7 +504,7 @@ chrome.storage.onChanged.addListener((changes) => {
         }
         
         delete link.dataset.devscanStyled;
-        window.attachRiskTooltip(link, riskLevel);
+        attachRiskTooltip(link, riskLevel);
       } else {
         link.style.textDecoration = "none";
         link.style.textDecorationColor = "";
@@ -520,7 +526,6 @@ window.addEventListener("scroll", () => {
     const documentHeight = document.documentElement.scrollHeight;
     
     if (scrollPosition >= documentHeight * 0.8) { // 80% scrolled
-      console.log("[DEVScan] Near bottom of page, checking for new content...");
       scanLinks();
     }
   }, 1000);
@@ -537,8 +542,6 @@ const urlObserver = new MutationObserver(() => {
     const previousUrl = lastUrl;
     lastUrl = window.location.href;
     
-    console.log("[DEVScan] URL changed from", previousUrl, "to", lastUrl);
-    
     // Update page tracking
     currentPageUrl = lastUrl;
     pageLoadTime = Date.now();
@@ -548,7 +551,6 @@ const urlObserver = new MutationObserver(() => {
     const currentUrlBase = lastUrl.split('#')[0];
     
     if (previousUrlBase !== currentUrlBase) {
-      console.log("[DEVScan] New page detected, clearing processed links and rescanning...");
       pageProcessedLinks.clear();
       pageRefreshDetected = false; // SPA navigation, not a refresh
       
@@ -556,16 +558,12 @@ const urlObserver = new MutationObserver(() => {
       setTimeout(() => {
         scanLinks();
       }, 1000);
-    } else {
-      console.log("[DEVScan] Hash change detected, no rescan needed");
     }
   }
 });
 
 // Monitor for URL changes in SPAs
 urlObserver.observe(document, { subtree: true, childList: true });
-
-console.log("[DEVScan] Dynamic content monitoring started");
 
 // ==============================
 // INITIALIZATION - START EXTENSION
@@ -578,7 +576,7 @@ function initializeExtension() {
     startDOMObserver();
     console.log("[DEVScan] ✅ Extension initialization complete");
   } catch (error) {
-    console.error("[DEVScan] ❌ Extension initialization failed:", error);
+    console.error("[DEVScan] Extension initialization failed:", error);
   }
 }
 
