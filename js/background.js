@@ -439,16 +439,28 @@ async function interceptURL(url, details) {
 
   const { verdict } = await handleSingleLinkAnalysis(resolvedUrl, domain, currentSessionId, details.tabId);
 
+  // Handle pending verdict - need further improvements
+  if (!verdict || verdict === "pending") {
+    console.log("[DEVScan] Pending verdict, redirecting to warning page...");
+    chrome.tabs.update(details.tabId, {
+      url: chrome.runtime.getURL(
+        `html/WarningPage.html?url=${encodeURIComponent(resolvedUrl)}&openerTabId=${details.tabId}&fromDevScan=true&ts=${Date.now()}`
+      )
+    });
+  }
   // Fix logic: redirect when verdict is malicious or anomalous
   if (verdict === "malicious" || verdict === "anomalous") {
+    addMaliciousUrl(url);
     console.log("[DEVScan] Risky verdict, redirecting to warning page...");
     chrome.tabs.update(details.tabId, {
       url: chrome.runtime.getURL(
         `html/WarningPage.html?url=${encodeURIComponent(resolvedUrl)}&openerTabId=${details.tabId}&fromDevScan=true&ts=${Date.now()}`
       )
     });
-    // (Optional) Extract links
-    // const extractionResult = await handleExtractLinks(resolvedUrl);
+    
+    const extractionResult = await handleExtractLinks(resolvedUrl);
+    console.log("[DEVScan] Link extraction result:", extractionResult);
+
   } else {
     console.log(`[DEVScan Background] URL appears safe: ${resolvedUrl}`);
   }
