@@ -1,0 +1,112 @@
+body {
+  font-family: "Segoe UI", sans-serif;
+  margin: 0;
+  padding: 20px;
+  background: linear-gradient(to bottom, #79b4e3, #0f3057);
+  color: #fff;
+  width: 300px;
+  box-sizing: border-box;
+}
+
+/* Generic card (kept if you want to reuse later) */
+.card {
+  background: #ffffff;
+  color: #222;
+  border-radius: 12px;
+  padding: 15px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+  text-align: center;
+  margin-bottom: 15px;
+}
+
+/* Dedicated header card (avoids double padding from nested .card) */
+.header-card {
+  background: #ffffff;
+  color: #222;
+  border-radius: 12px;
+  padding: 14px 16px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.22);
+  margin-bottom: 14px;
+}
+
+/* Logo row */
+.logo-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Crisp icon sizing/alignment */
+.logo-img {
+  max-width: 100%;
+  max-height: 50px; /* Adjust height to fit nicely in the box */
+  height: auto; /* Keep aspect ratio */
+  object-fit: contain;
+}
+
+/* Old h1 not used but safe to keep */
+h1 {
+  font-size: 20px;
+  margin: 0;
+}
+
+/* Toggles */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f0f0f0;
+  border-radius: 8px;
+  padding: 10px;
+  margin: 8px 0;
+  color: #222;
+}
+
+/* Footer + quote */
+.footer {
+  text-align: center;
+  font-size: 11px;
+  margin-top: 12px;
+}
+
+.quote {
+  background: #ffffff;
+  border-radius: 8px;
+  color: #333;
+  font-size: 12px;
+  padding: 10px;
+  margin-top: 10px;
+}
+
+/* Switches */
+input[type="checkbox"] {
+  width: 40px;
+  height: 20px;
+  appearance: none;
+  background: #999;
+  border-radius: 20px;
+  position: relative;
+  outline: none;
+  cursor: pointer;
+}
+
+input[type="checkbox"]:checked {
+  background: #3b82f6;
+}
+
+input[type="checkbox"]::before {
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  border-radius: 50%;
+  top: 2px;
+  left: 2px;
+  transition: 0.25s;
+}
+
+input[type="checkbox"]:checked::before {
+  transform: translateX(20px);
+}
+

@@ -1,0 +1,141 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@100;200;300;400;500;600;700;800&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  color: white;
+}
+
+body {
+  display: none; 
+  min-height: 100vh;  /* ensure full height */
+  width: 100vw;
+
+  background: url(../css/picture/scanning_background.png) no-repeat center center;
+  background-size: contain;
+  background-color: white;    /* fill the empty space around it */
+  font-family: 'Montserrat', sans-serif;
+  font-size: 16px;
+
+  cursor: wait;
+}
+
+
+main{
+  height: 100vh;
+  width: 100vw;
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  background-color: rgba(0, 0, 0, .5);
+}
+  .scanning-popup-content {
+    background: white;
+    padding: 1rem;
+    border-radius: .75rem;
+    width: clamp(450px, 50vw, 450px);
+    box-shadow: 0 .75rem 2rem rgba(0, 0, 0, 0.3);
+    text-align: center;
+
+    animation: scanningPopupSlide 0.3s ease-out;
+  }
+
+    .scanning-popup-header {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 1.25rem;
+      gap: .75rem;
+    }
+
+    .scanning-popup-header h3 {
+      margin: 0;
+      color: #C42927;
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .scanning-spinner {
+      width: 1.75rem;
+      height: 1.75rem;
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #C42927;
+      border-radius: 50%;
+      animation: scanningSpinner 1s linear infinite;
+    }
+
+    .scanning-popup-content p {
+      margin: 15px 0;
+      color: #333;
+      line-height: 1.5;
+      font-size: 16px;
+    }
+    
+
+    @keyframes scanningSpinner {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    @keyframes scanningPopupSlide {
+      from { 
+        opacity: 0; 
+        transform: translateY(-20px) scale(0.95); 
+      }
+      to { 
+        opacity: 1; 
+        transform: translateY(0) scale(1); 
+      }
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* header{
+  height: 10vh;
+
+  display: flex;
+  justify-content: start;
+  align-items: center;
+}
+  h1{
+    margin-left: 1vw;
+    color: black;
+  }
+
+main{
+  height: 100vh;
+  margin-top: -10vh;
+}
+
+  .background-container {
+    width: 100%;
+    height: 100%;
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .background-container img {
+    height: 95%;
+  } */

@@ -1,0 +1,234 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@100;200;300;400;500;600;700;800&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  color: white;
+}
+
+body {
+  background-color: #ff8c00;
+  background-repeat: no-repeat;
+  background-position: center top;
+  background-size: contain;
+  font-family: 'Montserrat', sans-serif;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 60px 20px 40px 20px;
+  margin: 0;
+}
+
+/* Logo */
+.Icon-box {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+}
+
+.Icon-box img {
+  max-width: 200px;
+  width: 100%;
+}
+
+/* Background */
+.background-image{
+  margin-left: 310px;
+  z-index: -1;
+  position: absolute;
+}
+
+/* Main Content */
+.box-main-content {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 400;
+  max-width: 1300px;
+  text-align: center;
+  line-height: 1.4;
+  margin: 0 auto;
+}
+
+.warning-title {
+  font-size: clamp(32px, 5vw, 48px);
+  font-weight: 900;
+  margin-bottom: 25px;
+  letter-spacing: 1px;
+}
+
+.description-content {
+  font-size: clamp(20px, 2.8vw, 26px);
+  font-weight: 500;
+  margin-bottom: 30px;
+  line-height: 1.5;
+}
+
+.title-description {
+  font-size: clamp(22px, 2.6vw, 28px);
+  font-weight: 700;
+  margin-bottom: 20px;
+}
+
+.ul-content {
+  margin: 25px auto;
+  padding-left: 20px;
+  text-align: left;
+  max-width: 800px;
+  font-size: clamp(18px, 2.4vw, 22px);
+  line-height: 1.6;
+  font-weight: 500;
+}
+
+.ul-content li {
+  margin-bottom: 15px;
+}
+
+.indicator-level {
+  font-size: clamp(20px, 2.8vw, 26px);
+  font-weight: 900;
+  margin: 35px auto 25px auto;
+  background-color: #e67300;
+  color: white;
+  padding: 18px 30px;
+  border-radius: 0;
+  display: inline-block;
+  box-shadow: none;
+  border-left: 6px solid #FFD700;
+  border-right: 6px solid #FFD700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+/* Button */
+.button-container {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 45px;
+  flex-wrap: wrap;
+  max-width: 900px;
+  width: 100%;
+}
+
+.safety-btn {
+  background-color: white;
+  color: #ff8c00;
+  border: none;
+  padding: 16px 32px;
+  font-weight: 700;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: clamp(15px, 1.6vw, 18px);
+  transition: all 0.3s ease;
+  min-width: 220px;
+  font-family: 'Montserrat', sans-serif;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  flex: 0 0 auto;
+}
+
+.safety-btn:hover {
+  background-color: #f3f3f3;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+.proceed-btn {
+  background-color: transparent;
+  color: white;
+  border: 3px solid white;
+  padding: 16px 32px;
+  font-weight: 700;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: clamp(15px, 1.6vw, 18px);
+  transition: all 0.3s ease;
+  min-width: 220px;
+  font-family: 'Montserrat', sans-serif;
+  flex: 0 0 auto;
+}
+
+.proceed-btn:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-2px);
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+  body {
+    padding: 15px;
+  }
+
+  .box-main-content {
+    max-width: 90%;
+  }
+
+  .ul-content {
+    padding-left: 15px;
+    max-width: 100%;
+  }
+
+  .Icon-box {
+    top: 15px;
+    left: 15px;
+  }
+
+  .Icon-box img {
+    max-width: 120px;
+  }
+
+  .background-image {
+    margin-left: 200px;
+  }
+
+  .button-container {
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+    margin-top: 30px;
+  }
+}
+
+@media (max-width: 480px) {
+  body {
+    padding: 10px;
+  }
+
+  .box-main-content {
+    max-width: 95%;
+  }
+
+  .Icon-box img {
+    max-width: 100px;
+  }
+
+  .background-image {
+    margin-left: 150px;
+  }
+
+  .background-image img {
+    height: 600px;
+  }
+
+  .safety-btn,
+  .proceed-btn {
+    width: 100%;
+    max-width: 280px;
+    padding: 16px;
+  }
+
+  .ul-content {
+    padding-left: 10px;
+  }
+}
+
+@media (max-width: 360px) {
+  .background-image {
+    margin-left: 100px;
+  }
+
+  .background-image img {
+    height: 500px;
+  }
+}

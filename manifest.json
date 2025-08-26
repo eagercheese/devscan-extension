@@ -1,0 +1,70 @@
+{
+  "manifest_version": 3,
+  "name": "DEVSCAN",
+  "version": "4.0",
+  "description": "DEVScan: Real-time link scanner with tooltips and warning redirection.",
+
+  "permissions": ["webRequest", "storage", "tabs", "scripting", "activeTab"],
+
+  "host_permissions": ["<all_urls>"],
+
+  "background": {
+    "service_worker": "js/background.js"
+  },
+
+  "action": {
+    "default_popup": "html/popup.html",
+    "default_icon": {
+      "48": "icons/icon48.png"
+    }
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": [
+        "js/settings.js",
+        "js/riskLogic.js",
+        "js/tooltip-sidebar.js",
+        "js/tooltipHandler.js",
+        "js/toastUI.js",
+        "js/content.js",
+        "js/reminder.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ],
+
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "html/WarningPage.html",
+        "html/AnomalousWarningPage.html",
+        "html/StrictWarningPage.html",
+        "html/ScanningPage.html",
+        "css/WarningPage.css",
+        "css/AnomalousWarningPage.css",
+        "css/StrictWarningPage.css",
+        "js/warning.js",
+        "js/scanning.js",
+        "icons/tooltip_bilog.png",
+        "css/picture/safe_exclamation.png",
+        "css/picture/warning_exclamation.png",
+        "css/picture/caution_exclamation.png",
+        "css/picture/caution_mark_red.png",
+        "css/picture/caution_mark_green.png",
+        "css/picture/exclamationMark.png",
+        "css/picture/Warning_Logo.png",
+        "css/picture/DEVscan Logo.png",
+        "css/picture/devscan_logo.png",
+        "css/picture/scanning_background.png"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ],
+
+  "icons": {
+    "48": "icons/icon48.png"
+  }
+}
