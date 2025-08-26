@@ -481,7 +481,7 @@ function showScanningPopup() {
       </div>
       <p>DEVScan is currently analyzing this link for your safety. Please wait for the scan to complete before clicking the link.</p>
       <p><strong>This helps protect you from potential security threats!</strong></p>
-      <button class="scanning-popup-close" onclick="this.parentElement.parentElement.remove()">I'll Wait</button>
+      <button class="scanning-popup-close">I'll Wait</button>
     </div>
   `;
 
@@ -574,6 +574,16 @@ function showScanningPopup() {
   // Add popup and styles to page
   document.head.appendChild(style);
   document.body.appendChild(popup);
+
+  // Add event listener for close button
+  const closeButton = popup.querySelector('.scanning-popup-close');
+  if (closeButton) {
+    closeButton.addEventListener('click', () => {
+      if (popup.parentElement) {
+        popup.remove();
+      }
+    });
+  }
 
   // Auto-remove popup after 5 seconds
   setTimeout(() => {
