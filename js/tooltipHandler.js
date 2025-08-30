@@ -218,6 +218,27 @@ const iconUrls = {
     },
   };
 
+  // ---- small helper to force-close the hover tooltip immediately ----
+  function closeTooltipNow() {
+    if (hideTimer) {
+      clearTimeout(hideTimer);
+      hideTimer = 0;
+    }
+    if (lockTimer) {
+      clearTimeout(lockTimer);
+      lockTimer = 0;
+    }
+    collapseTooltip();
+    hideTooltip();
+    stopPointerFollow();
+    resetLock();
+    overLink = overTip = overBridge = false;
+    currentLink = null;
+    try {
+      bridge.style.display = "none";
+    } catch {}
+  }
+
   // ---- Render ----
   function renderTooltip(level, href) {
     const s = styles[level] || styles.safe;
@@ -277,7 +298,7 @@ const iconUrls = {
       }
     });
 
-    // open right sidebar (no fallback)
+    // open right sidebar and CLOSE the hover tooltip immediately
     const moreBtn = tooltip.querySelector(".ds-more");
     moreBtn?.addEventListener("click", (e) => {
       e.preventDefault();
@@ -297,13 +318,18 @@ const iconUrls = {
         subtext: s.subtext,
       };
 
-      if (
-        window.devscanSidebar &&
-        typeof window.devscanSidebar.open === "function"
-      ) {
-        window.devscanSidebar.open(details);
-      } else {
-        console.warn("DEVScan: tooltip-sidebar.js not loaded");
+      try {
+        if (
+          window.devscanSidebar &&
+          typeof window.devscanSidebar.open === "function"
+        ) {
+          window.devscanSidebar.open(details);
+        } else {
+          console.warn("DEVScan: tooltip-sidebar.js not loaded");
+        }
+      } finally {
+        // ensure the hover tooltip disappears
+        closeTooltipNow();
       }
     });
   }
@@ -567,6 +593,7 @@ const iconUrls = {
       }
     }
 
+    // fallback (right, clamped)
     let fallbackPos = positions[0];
     fallbackPos.left = Math.max(
       padding,
@@ -641,7 +668,7 @@ const iconUrls = {
       collapseTooltip();
       showTooltip();
 
-      // Use element-based positioning (Grammarly-style)
+      // element-based positioning (Grammarly-style)
       placeNearElement(link);
 
       // build bridge immediately so user can move toward it
@@ -708,13 +735,15 @@ const iconUrls = {
       }
     });
 
-   // ---- Dynamic update ----
+    // ---- Dynamic update ----
     if (currentLink === link && tooltip.style.display === "block") {
       renderTooltip(newLevel, link.href || link.src || "");
 
       // update the sidebar if it's open
-      // trial for the error
-      if (window.devscanSidebar && typeof window.devscanSidebar.update === "function") {
+      if (
+        window.devscanSidebar &&
+        typeof window.devscanSidebar.update === "function"
+      ) {
         const details = {
           level: newLevel,
           href: link.href || link.src || "",
@@ -729,7 +758,7 @@ const iconUrls = {
         window.devscanSidebar.update(details);
       }
     }
-};
+  };
 
   // safety: if page layout shifts, close unless pointer is on tip/bridge
   window.addEventListener(

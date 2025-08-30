@@ -213,7 +213,7 @@
   }
 
   function update(details) {
-    paint(details || {});  // trial of the error
+    paint(details || {}); // trial of the error
   }
 
   function close() {
