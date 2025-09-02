@@ -256,6 +256,18 @@ const iconUrls = {
       ? ""
       : `background-image:url('${iconUrls[level]}')`;
 
+    // Get extra fields from currentLink.dataset if available
+    let confidence = '';
+    let anomalyRisk = '';
+    let explanation = '';
+    let tip = '';
+    if (currentLink) {
+      confidence = currentLink.dataset.confidence || '';
+      anomalyRisk = currentLink.dataset.anomalyRisk || '';
+      explanation = currentLink.dataset.explanation || '';
+      tip = currentLink.dataset.tip || '';
+    }
+
     tooltip.innerHTML = `
       <div class="tooltip-wrapper${isScanning ? " scanning" : ""}">
         <div class="tooltip-header">
@@ -272,14 +284,9 @@ const iconUrls = {
         </div>
 
         <div class="tooltip-body" style="${bodyBg}">
-          <div class="tooltip-title" style="color:${s.titleColor};">${
-      s.mainTitle
-    }</div>
+          <div class="tooltip-title" style="color:${s.titleColor};">${s.mainTitle}</div>
           <div class="tooltip-description">${s.description}</div>
-          <div class="tooltip-link"><strong style="color:${
-            s.titleColor
-          };">${href}</strong></div>
-
+          <div class="tooltip-link"><strong style="color:${s.titleColor};">${href}</strong></div>
           <div class="tooltip-actions">
             <button class="ds-more" type="button"><span class="ds-logo" aria-hidden="true"></span> See more in DEVScan</button>
           </div>
@@ -304,19 +311,41 @@ const iconUrls = {
       e.preventDefault();
       e.stopPropagation();
 
+      // Debug: Log all dataset values
+      console.log('[DEVScan Tooltip] 🔧 DEBUG: currentLink element:', currentLink);
+      console.log('[DEVScan Tooltip] 🔧 DEBUG: Link dataset keys:', currentLink ? Object.keys(currentLink.dataset) : 'no currentLink');
+      console.log('[DEVScan Tooltip] 🔧 DEBUG: Link dataset values:', {
+        finalVerdict: currentLink?.dataset.finalVerdict,
+        confidence: currentLink?.dataset.confidence,
+        anomalyRisk: currentLink?.dataset.anomalyRisk,
+        explanation: currentLink?.dataset.explanation,
+        tip: currentLink?.dataset.tip,
+        devscanRisk: currentLink?.dataset.devscanRisk,
+        allDataset: currentLink?.dataset
+      });
+
       const details = {
         level,
         href,
+        // ML verdict data from dataset
+        final_verdict: (currentLink && currentLink.dataset.finalVerdict) || "—",
+        confidence_score: (currentLink && currentLink.dataset.confidence) || "—",
+        anomaly_risk_level: (currentLink && currentLink.dataset.anomalyRisk) || "—",
+        explanation: (currentLink && currentLink.dataset.explanation) || "",
+        tip: (currentLink && currentLink.dataset.tip) || "",
+        // Legacy compatibility fields
         confidence:
           (currentLink && parseInt(currentLink.dataset.confidence || "", 10)) ||
           0,
-        riskLabel: (currentLink && currentLink.dataset.riskLabel) || "—",
+        riskLabel: (currentLink && currentLink.dataset.anomalyRisk) || "—",
         verdict: (currentLink && currentLink.dataset.finalVerdict) || "—",
         description: s.description,
         title: s.mainTitle,
         label: s.label,
         subtext: s.subtext,
       };
+
+      console.log('[DEVScan Tooltip] 🔧 DEBUG: Sending details to sidebar:', details);
 
       try {
         if (
@@ -747,8 +776,15 @@ const iconUrls = {
         const details = {
           level: newLevel,
           href: link.href || link.src || "",
+          // ML verdict data from dataset
+          final_verdict: link.dataset.finalVerdict || "—",
+          confidence_score: link.dataset.confidence || "—",
+          anomaly_risk_level: link.dataset.anomalyRisk || "—",
+          explanation: link.dataset.explanation || "",
+          tip: link.dataset.tip || "",
+          // Legacy compatibility fields
           confidence: parseInt(link.dataset.confidence || "0", 10),
-          riskLabel: link.dataset.riskLabel || "—",
+          riskLabel: link.dataset.anomalyRisk || "—",
           verdict: link.dataset.finalVerdict || "—",
           description: styles[newLevel]?.description,
           title: styles[newLevel]?.mainTitle,

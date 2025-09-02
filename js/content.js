@@ -232,6 +232,8 @@ function analyzeSingleLink(url) {
   };
 
   console.log(`[DEVScan] 📤 Sending message to background:`, message);
+  console.log(`[DEVScan] 🔧 DEBUG: chrome.runtime available:`, !!chrome.runtime);
+  console.log(`[DEVScan] 🔧 DEBUG: sendMessage function available:`, !!chrome.runtime.sendMessage);
 
   chrome.runtime.sendMessage(message, (response) => {
     if (chrome.runtime.lastError) {
@@ -242,11 +244,12 @@ function analyzeSingleLink(url) {
   });
 
   // Set a client-side timeout as backup in case server is completely unresponsive
-  // Increased timeout to 120 seconds to allow much more time for server processing
+  // Increased timeout to 150 seconds to allow much more time for server processing
   setTimeout(() => {
     // Check if this URL is still marked as scanning
     if (linkVerdicts.get(url) === undefined && collectedLinks.has(url)) {
-      console.log(`[DEVScan] ⏰ Client timeout reached for ${url} after 2 minutes, marking as scan failed for security`);
+      console.log(`[DEVScan] ⏰ Client timeout reached for ${url} after 2.5 minutes, marking as scan failed for security`);
+      console.log(`[DEVScan] 🔧 DEBUG: Final timeout state - verdict: ${linkVerdicts.get(url)}, in collection: ${collectedLinks.has(url)}`);
       
       // Update with scan_failed verdict as fallback for security
       linkVerdicts.set(url, "scan_failed");
@@ -255,7 +258,7 @@ function analyzeSingleLink(url) {
     } else {
       console.log(`[DEVScan] ✅ No timeout needed for ${url} - verdict: ${linkVerdicts.get(url)}, in collection: ${collectedLinks.has(url)}`);
     }
-  }, 120000); // 120 second (2 minutes) client-side timeout to give much more time
+  }, 150000); // 150 second (2.5 minutes) client-side timeout to give much more time
 
   // The response will come via the "updateSingleLinkVerdict" message listener
   // No need for response callback - using direct messaging instead
@@ -390,29 +393,60 @@ function updateLinkTooltip(url, verdict) {
 
   let updateCount = 0;
   links.forEach((link) => {
+    console.log('[DEVScan Content] 🔧 DEBUG: Processing verdict for link:', {
+      url: link.href,
+      verdict: verdict,
+      verdictType: typeof verdict
+    });
+    
+    // If verdict is an object, update all fields
+    let riskLevel = verdict;
+    if (typeof verdict === 'object' && verdict !== null) {
+      console.log('[DEVScan Content] 🔧 DEBUG: Storing ML object data:', verdict);
+      // Store all fields in dataset
+      link.dataset.finalVerdict = verdict.final_verdict || '';
+      link.dataset.confidence = verdict.confidence_score != null ? verdict.confidence_score : '';
+      link.dataset.anomalyRisk = verdict.anomaly_risk_level || '';
+      link.dataset.explanation = verdict.explanation || '';
+      link.dataset.tip = verdict.tip || '';
+      riskLevel = verdict.final_verdict || 'scanning';
+    } else {
+      console.log('[DEVScan Content] 🔧 DEBUG: Storing string verdict:', verdict);
+      link.dataset.finalVerdict = verdict;
+      link.dataset.confidence = '';
+      link.dataset.anomalyRisk = '';
+      link.dataset.explanation = '';
+      link.dataset.tip = '';
+      riskLevel = verdict;
+    }
+    
+    console.log('[DEVScan Content] 🔧 DEBUG: Stored dataset:', {
+      finalVerdict: link.dataset.finalVerdict,
+      confidence: link.dataset.confidence,
+      anomalyRisk: link.dataset.anomalyRisk,
+      explanation: link.dataset.explanation,
+      tip: link.dataset.tip
+    });
+
     // Always force refresh if verdict actually changed
     const currentRisk = link.dataset.devscanRisk;
-    const needsUpdate = currentRisk !== verdict;
-    
-    console.log(`[DEVScan] Updating link ${url} from ${currentRisk} to ${verdict}`);
-    
+    const needsUpdate = currentRisk !== riskLevel;
+    console.log(`[DEVScan] Updating link ${url} from ${currentRisk} to ${riskLevel}`);
     if (needsUpdate) {
       delete link.dataset.tooltipBound;
       delete link.dataset.devscanStyled;
     }
-    
-    link.dataset.devscanRisk = verdict;
+    link.dataset.devscanRisk = riskLevel;
 
     // Always reattach tooltip for fresh state
     if (typeof window.attachRiskTooltip === 'function') {
-      attachRiskTooltip(link, verdict);
+      attachRiskTooltip(link, riskLevel);
     } else {
       console.error('[DEVScan] attachRiskTooltip function not available during update');
     }
 
     // Reattach click handler with updated verdict
     attachClickHandler(link);
-
     updateCount++;
   });
 
@@ -429,6 +463,12 @@ function attachClickHandler(link) {
 
   // Create new click handler that opens warning page for risky links
   const clickHandler = (e) => {
+    // Check if temporary bypass is active
+    if (window.devscanTemporaryBypass) {
+      console.log('[DEVScan] Temporary bypass active, allowing navigation');
+      return; // Allow normal navigation
+    }
+
     const storedRisk = link.dataset.devscanRisk || "safe";
 
     // Check if link is currently being scanned
@@ -436,8 +476,24 @@ function attachClickHandler(link) {
       e.preventDefault();
       e.stopPropagation();
       
+      // Store the actual link element for the "Proceed Anyway" button
+      window.devscanCurrentClickedLink = link;
+      
       // Show scanning popup message
       showScanningPopup();
+      return;
+    }
+
+    // Check if scan failed
+    if (storedRisk === "scan_failed") {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Store the actual link element for the "Proceed with Caution" button
+      window.devscanCurrentClickedLink = link;
+      
+      // Show scan failed popup message
+      showScanFailedPopup();
       return;
     }
 
@@ -481,7 +537,10 @@ function showScanningPopup() {
       </div>
       <p>DEVScan is currently analyzing this link for your safety. Please wait for the scan to complete before clicking the link.</p>
       <p><strong>This helps protect you from potential security threats!</strong></p>
-      <button class="scanning-popup-close">I'll Wait</button>
+      <div class="scanning-popup-buttons">
+        <button class="scanning-popup-close">I'll Wait</button>
+        <button class="scanning-popup-proceed">Proceed Anyway</button>
+      </div>
     </div>
   `;
 
@@ -522,15 +581,15 @@ function showScanningPopup() {
     }
     .scanning-popup-header h3 {
       margin: 0;
-      color: #C42927;
+      color: #2563eb;
       font-size: 20px;
       font-weight: 700;
     }
     .scanning-spinner {
       width: 24px;
       height: 24px;
-      border: 3px solid #f3f3f3;
-      border-top: 3px solid #C42927;
+      border: 3px solid #e5f2ff;
+      border-top: 3px solid #2563eb;
       border-radius: 50%;
       animation: scanningSpinner 1s linear infinite;
     }
@@ -540,20 +599,40 @@ function showScanningPopup() {
       line-height: 1.5;
       font-size: 16px;
     }
-    .scanning-popup-close {
-      background: #C42927;
-      color: white;
+    .scanning-popup-buttons {
+      display: flex;
+      gap: 15px;
+      justify-content: space-between;
+      margin-top: 25px;
+      padding: 0 10px;
+    }
+    .scanning-popup-close, .scanning-popup-proceed {
       border: none;
-      padding: 12px 24px;
+      padding: 10px 20px;
       border-radius: 6px;
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 600;
       cursor: pointer;
-      margin-top: 15px;
-      transition: background 0.3s ease;
+      transition: all 0.3s ease;
+      flex: 1;
+      max-width: 140px;
+      min-width: 120px;
+    }
+    .scanning-popup-close {
+      background: #2563eb;
+      color: white;
     }
     .scanning-popup-close:hover {
-      background: #a02220;
+      background: #1d4ed8;
+    }
+    .scanning-popup-proceed {
+      background: #f1f5f9;
+      color: #475569;
+      border: 2px solid #cbd5e1;
+    }
+    .scanning-popup-proceed:hover {
+      background: #e2e8f0;
+      border-color: #94a3b8;
     }
     @keyframes scanningSpinner {
       0% { transform: rotate(0deg); }
@@ -575,13 +654,42 @@ function showScanningPopup() {
   document.head.appendChild(style);
   document.body.appendChild(popup);
 
-  // Add event listener for close button
+  // Add event listeners for buttons
   const closeButton = popup.querySelector('.scanning-popup-close');
+  const proceedButton = popup.querySelector('.scanning-popup-proceed');
+  
   if (closeButton) {
     closeButton.addEventListener('click', () => {
       if (popup.parentElement) {
         popup.remove();
       }
+    });
+  }
+  
+  if (proceedButton) {
+    proceedButton.addEventListener('click', () => {
+      if (popup.parentElement) {
+        popup.remove();
+      }
+      
+      // Set temporary bypass flag
+      window.devscanTemporaryBypass = true;
+      
+      // Get the stored link element and navigate to it
+      const clickedLink = window.devscanCurrentClickedLink;
+      if (clickedLink && clickedLink.href) {
+        console.log('[DEVScan] Proceeding anyway to:', clickedLink.href);
+        // Navigate to the URL directly
+        window.location.href = clickedLink.href;
+      } else {
+        console.warn('[DEVScan] No valid link found to proceed to');
+      }
+      
+      // Clear the bypass flag and stored link after navigation
+      setTimeout(() => {
+        delete window.devscanTemporaryBypass;
+        delete window.devscanCurrentClickedLink;
+      }, 1000);
     });
   }
 
@@ -591,6 +699,182 @@ function showScanningPopup() {
       popup.remove();
     }
   }, 5000);
+}
+
+// Function to show scan failed popup message
+function showScanFailedPopup() {
+  // Check if popup already exists to avoid duplicates
+  if (document.getElementById('devscan-scanfailed-popup')) {
+    return;
+  }
+
+  // Create popup element
+  const popup = document.createElement('div');
+  popup.id = 'devscan-scanfailed-popup';
+  popup.innerHTML = `
+    <div class="scanfailed-popup-content">
+      <div class="scanfailed-popup-header">
+        <div class="scanfailed-icon">⚠️</div>
+        <h3>Security Scan Failed</h3>
+      </div>
+      <p>DEVScan was unable to analyze this link for security threats. This could be due to network issues or server unavailability.</p>
+      <p><strong>We recommend exercising caution when proceeding to unknown links.</strong></p>
+      <div class="scanfailed-popup-buttons">
+        <button class="scanfailed-popup-close">Cancel</button>
+        <button class="scanfailed-popup-proceed">Proceed with Caution</button>
+      </div>
+    </div>
+  `;
+
+  // Add styles
+  popup.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 999999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+  `;
+
+  // Add styles for popup content
+  const style = document.createElement('style');
+  style.textContent = `
+    .scanfailed-popup-content {
+      background: white;
+      padding: 30px;
+      border-radius: 12px;
+      max-width: 450px;
+      margin: 20px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+      text-align: center;
+      animation: scanfailedPopupSlide 0.3s ease-out;
+    }
+    .scanfailed-popup-header {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+      gap: 12px;
+    }
+    .scanfailed-popup-header h3 {
+      margin: 0;
+      color: #6b7280;
+      font-size: 20px;
+      font-weight: 700;
+    }
+    .scanfailed-icon {
+      font-size: 24px;
+      animation: scanfailedPulse 2s ease-in-out infinite;
+    }
+    .scanfailed-popup-content p {
+      margin: 15px 0;
+      color: #333;
+      line-height: 1.5;
+      font-size: 16px;
+    }
+    .scanfailed-popup-buttons {
+      display: flex;
+      gap: 15px;
+      justify-content: space-between;
+      margin-top: 25px;
+      padding: 0 10px;
+    }
+    .scanfailed-popup-close, .scanfailed-popup-proceed {
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      flex: 1;
+      max-width: 140px;
+      min-width: 120px;
+    }
+    .scanfailed-popup-close {
+      background: #9ca3af;
+      color: white;
+    }
+    .scanfailed-popup-close:hover {
+      background: #6b7280;
+    }
+    .scanfailed-popup-proceed {
+      background: #4b5563;
+      color: white;
+    }
+    .scanfailed-popup-proceed:hover {
+      background: #374151;
+    }
+    @keyframes scanfailedPulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+    }
+    @keyframes scanfailedPopupSlide {
+      from { 
+        opacity: 0; 
+        transform: translateY(-20px) scale(0.95); 
+      }
+      to { 
+        opacity: 1; 
+        transform: translateY(0) scale(1); 
+      }
+    }
+  `;
+
+  // Add popup and styles to page
+  document.head.appendChild(style);
+  document.body.appendChild(popup);
+
+  // Add event listeners for buttons
+  const closeButton = popup.querySelector('.scanfailed-popup-close');
+  const proceedButton = popup.querySelector('.scanfailed-popup-proceed');
+  
+  if (closeButton) {
+    closeButton.addEventListener('click', () => {
+      if (popup.parentElement) {
+        popup.remove();
+      }
+    });
+  }
+  
+  if (proceedButton) {
+    proceedButton.addEventListener('click', () => {
+      if (popup.parentElement) {
+        popup.remove();
+      }
+      
+      // Set temporary bypass flag
+      window.devscanTemporaryBypass = true;
+      
+      // Get the stored link element and navigate to it
+      const clickedLink = window.devscanCurrentClickedLink;
+      if (clickedLink && clickedLink.href) {
+        console.log('[DEVScan] Proceeding with caution to:', clickedLink.href);
+        // Navigate to the URL directly
+        window.location.href = clickedLink.href;
+      } else {
+        console.warn('[DEVScan] No valid link found to proceed to');
+      }
+      
+      // Clear the bypass flag and stored link after navigation
+      setTimeout(() => {
+        delete window.devscanTemporaryBypass;
+        delete window.devscanCurrentClickedLink;
+      }, 1000);
+    });
+  }
+
+  // Auto-remove popup after 8 seconds (longer than scanning popup)
+  setTimeout(() => {
+    if (popup.parentElement) {
+      popup.remove();
+    }
+  }, 8000);
 }
 
 // ==============================
@@ -674,9 +958,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     showToast(msg.message, msg.type);
   } else if (msg.action === "updateSingleLinkVerdict") {
     // Handle individual link verdict updates for immediate feedback
-    const { url, verdict } = msg;
+    const { url, verdict, verdictData } = msg;
 
     console.log(`[DEVScan Content] 📨 Received verdict for ${url}: ${verdict}`);
+    console.log(`[DEVScan Content] 🔧 DEBUG: Verdict data:`, verdictData);
     console.log(`[DEVScan Content] Current linkVerdicts state:`, Array.from(linkVerdicts.entries()));
     console.log(`[DEVScan Content] Current collectedLinks state:`, Array.from(collectedLinks));
 
@@ -687,12 +972,37 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       return true;
     }
 
-    // Store the verdict and update tooltip
+    // Store the verdict and verdict data
     linkVerdicts.set(url, verdict);
+    console.log(`[DEVScan Content] ✅ Successfully stored verdict ${verdict} for ${url}`);
+    console.log(`[DEVScan Content] 🔧 DEBUG: linkVerdicts now contains:`, Array.from(linkVerdicts.entries()));
+    
+    if (verdictData) {
+      // Store additional verdict data for rich tooltips
+      const links = document.querySelectorAll(`a[href="${url}"]`);
+      console.log(`[DEVScan Content] 🔧 DEBUG: Found ${links.length} links matching href="${url}"`);
+      links.forEach((link, index) => {
+        console.log(`[DEVScan Content] 🔧 DEBUG: Updating link ${index + 1} with verdict data`);
+        link.dataset.finalVerdict = verdictData.final_verdict || '';
+        link.dataset.confidence = verdictData.confidence_score || ''; // Fixed: use 'confidence' not 'confidenceScore'
+        link.dataset.anomalyRisk = verdictData.anomaly_risk_level || '';
+        link.dataset.explanation = verdictData.explanation || '';
+        link.dataset.tip = verdictData.tip || '';
+        link.dataset.riskLabel = verdict; // Store the simplified verdict too
+      });
+      
+      // Update tooltip with full verdict object for rich data
+      console.log(`[DEVScan Content] 🔧 DEBUG: Calling updateLinkTooltip with verdictData object`);
+      const updateSuccess = updateLinkTooltip(url, verdictData);
+      console.log(`[DEVScan Content] ${updateSuccess ? '✅' : '❌'} Tooltip update for ${url} with full data`);
+    } else {
+      // Fallback to string verdict if no rich data
+      console.log(`[DEVScan Content] 🔧 DEBUG: Calling updateLinkTooltip with string verdict: ${verdict}`);
+      const updateSuccess = updateLinkTooltip(url, verdict);
+      console.log(`[DEVScan Content] ${updateSuccess ? '✅' : '❌'} Tooltip update for ${url}: ${verdict}`);
+    }
+    
     console.log(`[DEVScan Content] Stored verdict ${verdict} for ${url}`);
-
-    const updateSuccess = updateLinkTooltip(url, verdict);
-    console.log(`[DEVScan Content] ${updateSuccess ? '✅' : '❌'} Tooltip update for ${url}: ${verdict}`);
 
     // Clean up processing state
     const wasInCollection = collectedLinks.has(url);

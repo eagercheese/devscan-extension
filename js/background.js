@@ -6,6 +6,60 @@
 // Manages scan sessions and coordinates between content scripts and server
 
 // ==============================
+// ML VERDICT CONVERSION
+// ==============================
+// Convert ML service verdict object to extension string format
+function convertMLVerdictToString(verdict) {
+  console.log(`[DEVScan Background] 🔧 DEBUG: Converting verdict:`, verdict);
+  
+  if (!verdict || typeof verdict !== 'object') {
+    console.log(`[DEVScan Background] 🔧 DEBUG: Invalid verdict, returning scan_failed`);
+    return 'scan_failed';
+  }
+
+  // If it's already a string (legacy format), return as-is
+  if (typeof verdict === 'string') {
+    console.log(`[DEVScan Background] 🔧 DEBUG: Already a string:`, verdict);
+    return verdict;
+  }
+
+  // Convert based on final_verdict field
+  const finalVerdict = verdict.final_verdict || '';
+  console.log(`[DEVScan Background] 🔧 DEBUG: final_verdict field:`, finalVerdict);
+  
+  if (finalVerdict.toLowerCase().includes('malicious') || 
+      finalVerdict.toLowerCase().includes('dangerous') ||
+      finalVerdict.toLowerCase().includes('phishing')) {
+    console.log(`[DEVScan Background] 🔧 DEBUG: Converted to malicious`);
+    return 'malicious';
+  }
+  
+  if (finalVerdict.toLowerCase().includes('safe') ||
+      finalVerdict.toLowerCase().includes('whitelisted') ||
+      finalVerdict.toLowerCase().includes('trusted')) {
+    console.log(`[DEVScan Background] 🔧 DEBUG: Converted to safe`);
+    return 'safe';
+  }
+  
+  if (finalVerdict.toLowerCase().includes('anomalous') ||
+      finalVerdict.toLowerCase().includes('suspicious') ||
+      verdict.anomaly_risk_level?.toLowerCase().includes('high')) {
+    console.log(`[DEVScan Background] 🔧 DEBUG: Converted to anomalous`);
+    return 'anomalous';
+  }
+  
+  if (finalVerdict.toLowerCase().includes('unknown') ||
+      finalVerdict.toLowerCase().includes('scan failed')) {
+    console.log(`[DEVScan Background] 🔧 DEBUG: Converted to scan_failed`);
+    return 'scan_failed';
+  }
+
+  // Default fallback
+  console.log(`[DEVScan Background] 🔧 DEBUG: No match found, defaulting to scan_failed`);
+  return 'scan_failed';
+}
+
+// ==============================
 // EXTENSION LIFECYCLE EVENTS
 // ==============================
 
@@ -186,6 +240,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   } 
   
   else if (message.action === "analyzeSingleLink") {
+    console.log(`[DEVScan Background] 🔧 DEBUG: Received analyzeSingleLink request for: ${message.url}`);
+    console.log(`[DEVScan Background] 🔧 DEBUG: Message details:`, message);
+    console.log(`[DEVScan Background] 🔧 DEBUG: Sender tab ID:`, sender.tab?.id);
+    
     // Handle individual link analysis for immediate verdict delivery
     handleSingleLinkAnalysis(message.url, message.domain, message.sessionId, sender.tab.id)
       .catch(error => {
@@ -266,9 +324,9 @@ async function handleSingleLinkAnalysis(url, domain, providedSessionId, tabId) {
     // Use provided session ID or fallback to stored one
     const sessionId = providedSessionId || currentSessionId;
 
-    // Create timeout promise that rejects after 45 seconds (increased significantly)
+    // Create timeout promise that rejects after 90 seconds (increased for ML processing)
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Request timeout - analysis taking too long')), 45000);
+      setTimeout(() => reject(new Error('Request timeout - analysis taking too long')), 90000);
     });
 
     // Create fetch promise with proper timeout
@@ -307,6 +365,7 @@ async function handleSingleLinkAnalysis(url, domain, providedSessionId, tabId) {
     if (result.success && result.verdicts) {
       // Try to find the verdict for this URL (exact match first)
       let verdict = result.verdicts[url];
+      let verdictString = 'scan_failed'; // Default value
 
       if (!verdict) {
         // If exact match fails, try to find by partial match or URL variations
@@ -349,32 +408,35 @@ async function handleSingleLinkAnalysis(url, domain, providedSessionId, tabId) {
       }
 
       if (verdict) {
-        console.log(`[DEVScan Background] 📤 Sending verdict to tab ${tabId}: ${url} -> ${verdict}`);
+        // Convert ML verdict object to extension string format
+        verdictString = convertMLVerdictToString(verdict);
         
-        // Send verdict directly to content script with retry logic
-        const sendMessage = () => {
-          chrome.tabs.sendMessage(tabId, {
-            action: "updateSingleLinkVerdict",
-            url: url,
-            verdict: verdict
-          }, (response) => {
-            if (chrome.runtime.lastError) {
-              console.error(`[DEVScan Background] Failed to send message to tab ${tabId}:`, chrome.runtime.lastError);
-              // Retry once after a short delay
-              setTimeout(() => {
-                chrome.tabs.sendMessage(tabId, {
-                  action: "updateSingleLinkVerdict",
-                  url: url,
-                  verdict: verdict
-                });
-              }, 1000);
-            } else {
-              console.log(`[DEVScan Background] ✅ Verdict delivered successfully for ${url}: ${verdict}`);
-            }
-          });
-        };
+        console.log(`[DEVScan Background] 📤 Sending verdict to tab ${tabId}: ${url} -> ${verdictString}`);
+        console.log(`[DEVScan Background] 🔧 DEBUG: Original verdict object:`, verdict);
+        console.log(`[DEVScan Background] 🔧 DEBUG: Converted to string:`, verdictString);
         
-        sendMessage();
+        // Store additional verdict data for tooltips
+        chrome.tabs.sendMessage(tabId, {
+          action: "updateSingleLinkVerdict",
+          url: url,
+          verdict: verdictString,
+          verdictData: verdict // Include full verdict object for tooltip display
+        }, (response) => {
+          if (chrome.runtime.lastError) {
+            console.error(`[DEVScan Background] Failed to send message to tab ${tabId}:`, chrome.runtime.lastError);
+            // Retry once after a short delay
+            setTimeout(() => {
+              chrome.tabs.sendMessage(tabId, {
+                action: "updateSingleLinkVerdict",
+                url: url,
+                verdict: verdictString,
+                verdictData: verdict
+              });
+            }, 1000);
+          } else {
+            console.log(`[DEVScan Background] ✅ Verdict delivered successfully for ${url}: ${verdictString}`);
+          }
+        });
       } else {
         console.error(`[DEVScan Background] No verdict found for ${url} in server response`);
 
@@ -392,12 +454,12 @@ async function handleSingleLinkAnalysis(url, domain, providedSessionId, tabId) {
       }
 
       // Add malicious URLs to intercept list for click-based blocking
-      if (verdict === "malicious" || verdict === "anomalous") {
+      if (verdictString === "malicious" || verdictString === "anomalous") {
         addMaliciousUrl(url);
       }
 
       return { 
-        verdict: verdict, 
+        verdict: verdictString, 
         sessionId: result.session_ID || sessionId 
       };
     } else {
