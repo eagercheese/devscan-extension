@@ -108,15 +108,10 @@ chrome.storage.sync.get(["currentSessionId"], (result) => {
 });
 
 const selectors = [
-  "a[href]",
-  "link[href]",
-  "iframe[src]",
-  "frame[src]",
-  "script[src]",
-  "form[action]",
-  "button[onclick]",
-  "[onclick*='http']",
-  "[data-href]",
+  "a[href]",    // Only scan actual navigation links
+  // Removed other selectors that shouldn't be scanned for security:
+  // "link[href]", "iframe[src]", "frame[src]", "script[src]", 
+  // "form[action]", "button[onclick]", "[onclick*='http']", "[data-href]"
 ];
 
 // ==============================
@@ -147,8 +142,12 @@ function processLink(link) {
 
   const isInternal = isSameDomain(link.href, window.location.href); // Check if it's an internal link first
 
-  if (isInternal) 
+  if (isInternal) {
+    console.log(`[DEVScan] 🔧 Skipping same-domain link: ${link.href}`);
     return; // Skip processing internal links completely - no tooltips, no underlining, no scanning
+  }
+
+  console.log(`[DEVScan] 🔧 Processing external link: ${link.href}`);
 
   // ==============================
   // EXTERNAL LINK PROCESSING
@@ -209,6 +208,12 @@ function collectLinkForAnalysis(rawUrl) {
     // Skip browser internal URLs and special protocols
     if (isBrowserInternalUrl(decodedUrl)) {
       console.log(`[DEVScan] Skipping browser internal URL: ${decodedUrl}`);
+      return;
+    }
+
+    // SAFETY CHECK: Skip same-domain links (should be caught earlier but extra safety)
+    if (isSameDomain(decodedUrl, window.location.href)) {
+      console.log(`[DEVScan] 🔧 Safety check: Skipping same-domain URL: ${decodedUrl}`);
       return;
     }
 
