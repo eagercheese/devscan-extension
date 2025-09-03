@@ -24,8 +24,42 @@ let pageRefreshDetected = false; // Track if page was refreshed
 let pageLoadTime = Date.now(); // Track when page loaded
 
 // ==============================
+// HELPER FUNCTIONS
+// ==============================
+
+// Check if a verdict represents a valid security assessment (not a failure)
+function isValidSecurityVerdict(verdict) {
+  if (!verdict || typeof verdict !== 'string') return false;
+  
+  const validVerdicts = ['safe', 'malicious', 'anomalous'];
+  return validVerdicts.includes(verdict.toLowerCase());
+}
+
+// ==============================
 // INITIALIZATION & SESSION MANAGEMENT
 // ==============================
+
+// Clear any cached scan failures to allow fresh retries
+function clearFailedCacheEntries() {
+  const failedEntries = [];
+  for (const [url, verdict] of linkVerdicts.entries()) {
+    if (!isValidSecurityVerdict(verdict)) {
+      failedEntries.push(url);
+    }
+  }
+  
+  failedEntries.forEach(url => {
+    linkVerdicts.delete(url);
+    console.log(`[DEVScan] 🧹 Cleared failed cache entry for: ${url}`);
+  });
+  
+  if (failedEntries.length > 0) {
+    console.log(`[DEVScan] 🧹 Cleared ${failedEntries.length} failed cache entries to allow retries`);
+  }
+}
+
+// Clear failed cache entries on page load
+clearFailedCacheEntries();
 
 // Detect if this is a page refresh or new navigation
 const navigationEntry = performance.getEntriesByType("navigation")[0];
@@ -197,11 +231,14 @@ function collectLinkForAnalysis(rawUrl) {
     }
 
     // ENHANCED DEDUPLICATION: Check multiple conditions
+    // Only skip if we have a valid cached security verdict (not failed scans)
     const isAlreadyCollected = collectedLinks.has(decodedUrl);
     const isAlreadyProcessed = pageProcessedLinks.has(decodedUrl);
-    const hasExistingVerdict = linkVerdicts.has(decodedUrl);
+    const cachedVerdict = linkVerdicts.get(decodedUrl);
+    const hasValidCachedVerdict = cachedVerdict && isValidSecurityVerdict(cachedVerdict);
 
-    if (isAlreadyCollected || isAlreadyProcessed || hasExistingVerdict) {
+    if (isAlreadyCollected || (isAlreadyProcessed && hasValidCachedVerdict)) {
+      console.log(`[DEVScan] 🔧 Skipping ${decodedUrl} - collected: ${isAlreadyCollected}, processed: ${isAlreadyProcessed}, valid cache: ${hasValidCachedVerdict}`);
       return;
     }
 
@@ -251,10 +288,10 @@ function analyzeSingleLink(url) {
       console.log(`[DEVScan] ⏰ Client timeout reached for ${url} after 2.5 minutes, marking as scan failed for security`);
       console.log(`[DEVScan] 🔧 DEBUG: Final timeout state - verdict: ${linkVerdicts.get(url)}, in collection: ${collectedLinks.has(url)}`);
       
-      // Update with scan_failed verdict as fallback for security
-      linkVerdicts.set(url, "scan_failed");
+      // Update tooltip but don't cache the failed result - allow retry later
       updateLinkTooltip(url, "scan_failed");
       collectedLinks.delete(url);
+      console.log(`[DEVScan] ⚠️ Not caching timeout failure for ${url} to allow future retries`);
     } else {
       console.log(`[DEVScan] ✅ No timeout needed for ${url} - verdict: ${linkVerdicts.get(url)}, in collection: ${collectedLinks.has(url)}`);
     }
@@ -972,9 +1009,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       return true;
     }
 
-    // Store the verdict and verdict data
-    linkVerdicts.set(url, verdict);
-    console.log(`[DEVScan Content] ✅ Successfully stored verdict ${verdict} for ${url}`);
+    // Only cache legitimate security verdicts, not failed scans
+    if (isValidSecurityVerdict(verdict)) {
+      linkVerdicts.set(url, verdict);
+      console.log(`[DEVScan Content] ✅ Successfully cached security verdict ${verdict} for ${url}`);
+    } else {
+      console.log(`[DEVScan Content] ⚠️ Not caching failed scan result for ${url}: ${verdict}`);
+      // Remove from collectedLinks to allow retry
+      collectedLinks.delete(url);
+    }
     console.log(`[DEVScan Content] 🔧 DEBUG: linkVerdicts now contains:`, Array.from(linkVerdicts.entries()));
     
     if (verdictData) {
@@ -1068,14 +1111,20 @@ window.addEventListener("load", () => {
 
 // Periodic cleanup to prevent memory leaks from accumulating too many cached results
 setInterval(() => {
-  // Clear old verdicts if we have too many (keep last 1000)
+  // First, clear any failed cache entries to allow retries
+  clearFailedCacheEntries();
+  
+  // Clear old verdicts if we have too many (keep last 1000 valid entries only)
   if (linkVerdicts.size > 1000) {
-    const entries = Array.from(linkVerdicts.entries());
+    const validEntries = Array.from(linkVerdicts.entries()).filter(([url, verdict]) => 
+      isValidSecurityVerdict(verdict)
+    );
     linkVerdicts.clear();
-    // Keep only the last 500 entries
-    entries.slice(-500).forEach(([url, verdict]) => {
+    // Keep only the last 500 valid entries
+    validEntries.slice(-500).forEach(([url, verdict]) => {
       linkVerdicts.set(url, verdict);
     });
+    console.log(`[DEVScan] 🧹 Kept ${Math.min(500, validEntries.length)} valid cache entries out of ${validEntries.length} total`);
   }
 
   // Clear page processed links if we have too many (keep last 500)

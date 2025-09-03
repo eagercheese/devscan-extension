@@ -20,7 +20,7 @@ document.addEventListener("DOMContentLoaded", () => {
     toggleWarning.checked = data.showWarningsOnly ?? true;
     toggleStrictBlocking.checked = data.strictMaliciousBlocking ?? true;
     if (serverUrlInput) {
-      serverUrlInput.value = data.serverUrl || "http://localhost:3000";
+      serverUrlInput.value = data.serverUrl || "http://localhost:3001";
     }
   });
 

@@ -74,7 +74,7 @@ chrome.runtime.onInstalled.addListener((details) => {
         showWarningsOnly: true,
         logDetection: false,
         suppressReminder: false, // initialize to false
-        serverUrl: "http://localhost:3000",
+        serverUrl: "http://localhost:3001",
         currentSessionId: null,
       };
 
@@ -111,7 +111,7 @@ chrome.runtime.onStartup.addListener(() => {
 async function checkServerHealth() {
   try {
     const { serverUrl } = await chrome.storage.sync.get("serverUrl");
-    const baseUrl = serverUrl || "http://localhost:3000";
+    const baseUrl = serverUrl || "http://localhost:3001";
 
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => reject(new Error('Health check timeout')), 8000); // Increased to 8 seconds
@@ -146,7 +146,7 @@ async function checkServerHealth() {
 async function createNewScanSession() {
   try {
     const { serverUrl } = await chrome.storage.sync.get("serverUrl");
-    const baseUrl = serverUrl || "http://localhost:3000";
+    const baseUrl = serverUrl || "http://localhost:3001";
 
     // Get browser info for session tracking
     const browserInfo = `Chrome Extension v4.0 - ${navigator.userAgent || 'Unknown Browser'}`;
@@ -319,7 +319,7 @@ async function handleSingleLinkAnalysis(url, domain, providedSessionId, tabId) {
 
     // Get server URL and session ID from storage
     const { serverUrl, currentSessionId } = await chrome.storage.sync.get(["serverUrl", "currentSessionId"]);
-    const baseUrl = serverUrl || "http://localhost:3000";
+    const baseUrl = serverUrl || "http://localhost:3001";
 
     // Use provided session ID or fallback to stored one
     const sessionId = providedSessionId || currentSessionId;
@@ -476,7 +476,7 @@ async function handleExtractLinks(maliciousUrl) {
   try {
     // Get server URL from storage
     const { serverUrl } = await chrome.storage.sync.get("serverUrl");
-    const baseUrl = serverUrl || "http://localhost:3000";
+    const baseUrl = serverUrl || "http://localhost:3001";
 
     // Create timeout promise
     const timeoutPromise = new Promise((_, reject) => {
@@ -515,7 +515,7 @@ async function handleExtractLinks(maliciousUrl) {
 async function unshortenLink(shortUrl) {
   try {
     const { serverUrl } = await chrome.storage.sync.get("serverUrl");
-    const baseUrl = serverUrl || "http://localhost:3000";
+    const baseUrl = serverUrl || "http://localhost:3001";
 
     // Create timeout promise
     const timeoutPromise = new Promise((_, reject) => {
