@@ -1,5 +1,5 @@
 // background.js
-import { decodeHexUrl, resolveShortenedUrl } from "./utils.js";
+import { decodeHexUrl, resolveShortenedUrl } from "./url-utils.js";
 
 // ==============================
 // DEVSCAN BACKGROUND SCRIPT
@@ -581,16 +581,12 @@ async function interceptURL(url, details) {
     currentSessionId = await createNewScanSession();
   }
 
-
+   // Redirect to scanning page immediately
+  // chrome.tabs.update(details.tabId, {
+  //   url: chrome.runtime.getURL(`html/ScanningPage.html?url=${encodeURIComponent(url)}`)
+  // });
   
   const { verdict } = await handleSingleLinkAnalysis(resolvedUrl, domain, currentSessionId, details.tabId);
-
-  await delay(500);
-  
-  // Redirect to scanning page immediately
-  chrome.tabs.update(details.tabId, {
-    url: chrome.runtime.getURL(`html/ScanningPage.html?url=${encodeURIComponent(url)}`)
-  });
 
   // Fix logic: redirect when verdict is malicious or anomalous
   if (verdict === "malicious" || verdict === "anomalous") {

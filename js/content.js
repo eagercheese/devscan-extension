@@ -1,6 +1,4 @@
 // content.js
-import { decodeHexUrl, resolveShortenedUrl } from "./utils.js";
-
 // ==============================
 // DEVSCAN CONTENT SCRIPT VERSION 4.0
 // ==============================
@@ -194,35 +192,33 @@ function processLink(link) {
 async function collectLinkForAnalysis(rawUrl, details = {}) {
   try {
     //Hex Decoder
-    const hexUrl = decodeHexUrl(rawUrl);
-
-    //Url unshortener
-    const decodedUrl = await resolveShortenedUrl(hexUrl, details);
+    const decodedUrl = decodeHexUrl(rawUrl);
+    const resolvedUrl = await resolveShortenedUrl(decodedUrl, details);
 
     // Skip browser internal URLs and special protocols
-    if (isBrowserInternalUrl(decodedUrl)) {
-      console.log(`[DEVScan] Skipping browser internal URL: ${decodedUrl}`);
+    if (isBrowserInternalUrl(resolvedUrl)) {
+      console.log(`[DEVScan] Skipping browser internal URL: ${resolvedUrl}`);
       return;
     }
 
     // ENHANCED DEDUPLICATION: Check multiple conditions
     // Only skip if we have a valid cached security verdict (not failed scans)
-    const isAlreadyCollected = collectedLinks.has(decodedUrl);
-    const isAlreadyProcessed = pageProcessedLinks.has(decodedUrl);
-    const cachedVerdict = linkVerdicts.get(decodedUrl);
+    const isAlreadyCollected = collectedLinks.has(resolvedUrl);
+    const isAlreadyProcessed = pageProcessedLinks.has(resolvedUrl);
+    const cachedVerdict = linkVerdicts.get(resolvedUrl);
     const hasValidCachedVerdict = cachedVerdict && isValidSecurityVerdict(cachedVerdict);
 
     if (isAlreadyCollected || (isAlreadyProcessed && hasValidCachedVerdict)) {
-      console.log(`[DEVScan] 🔧 Skipping ${decodedUrl} - collected: ${isAlreadyCollected}, processed: ${isAlreadyProcessed}, valid cache: ${hasValidCachedVerdict}`);
+      console.log(`[DEVScan] 🔧 Skipping ${resolvedUrl} - collected: ${isAlreadyCollected}, processed: ${isAlreadyProcessed}, valid cache: ${hasValidCachedVerdict}`);
       return;
     }
 
     // Mark as being processed before sending request
-    collectedLinks.add(decodedUrl);
-    pageProcessedLinks.add(decodedUrl);
+    collectedLinks.add(resolvedUrl);
+    pageProcessedLinks.add(resolvedUrl);
 
     // Send individual link for immediate analysis
-    analyzeSingleLink(decodedUrl);
+    analyzeSingleLink(resolvedUrl);
   } catch (e) {
     console.warn("[DEVScan] Failed to decode URL:", rawUrl, e);
   }

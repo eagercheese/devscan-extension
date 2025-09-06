@@ -9,7 +9,8 @@
   "host_permissions": ["<all_urls>"],
 
   "background": {
-    "service_worker": "js/background.js"
+    "service_worker": "js/background.js",
+    "type": "module"
   },
 
   "action": {
@@ -29,6 +30,7 @@
         "js/help-sidebar.js",
         "js/tooltipHandler.js",
         "js/toastUI.js",
+        "js/url-utils.js",
         "js/content.js",
         "js/reminder.js"
       ],
@@ -48,7 +50,7 @@
         "css/AnomalousWarningPage.css",
         "css/StrictWarningPage.css",
         "js/warning.js",
-        "js/scanning.js",
+        "js/url-utils.js",
         "icons/tooltip_bilog.png",
         "css/picture/safe_exclamation.png",
         "css/picture/warning_exclamation.png",
