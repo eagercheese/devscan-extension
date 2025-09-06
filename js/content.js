@@ -1,3 +1,6 @@
+// content.js
+import { decodeHexUrl, resolveShortenedUrl } from "./utils.js";
+
 // ==============================
 // DEVSCAN CONTENT SCRIPT VERSION 4.0
 // ==============================
@@ -187,52 +190,19 @@ function processLink(link) {
 // ==============================
 // LINK COLLECTION & BATCH PROCESSING
 // ==============================
-const shortenedPatterns = [
-  "bit.ly",
-  "t.co",
-  "tinyurl.com",
-  "goo.gl",
-  "is.gd",
-  "buff.ly",
-  "cutt.ly",
-  "ow.ly",
-  "rebrand.ly",
-];
-
 // Collect links for analysis and manage batching to server
-function collectLinkForAnalysis(rawUrl) {
+async function collectLinkForAnalysis(rawUrl, details = {}) {
   try {
     //Hex Decoder
-    const decodedUrl = decodeURIComponent(rawUrl);
+    const hexUrl = decodeHexUrl(rawUrl);
+
+    //Url unshortener
+    const decodedUrl = await resolveShortenedUrl(hexUrl, details);
 
     // Skip browser internal URLs and special protocols
     if (isBrowserInternalUrl(decodedUrl)) {
       console.log(`[DEVScan] Skipping browser internal URL: ${decodedUrl}`);
       return;
-    }
-
-    // SAFETY CHECK: Skip same-domain links (should be caught earlier but extra safety)
-    if (isSameDomain(decodedUrl, window.location.href)) {
-      console.log(`[DEVScan] 🔧 Safety check: Skipping same-domain URL: ${decodedUrl}`);
-      return;
-    }
-
-    //Url unshortener
-    try {
-      const parsedUrl = new URL(decodedUrl);
-
-      // Check if it's a shortened link
-      if (shortenedPatterns.includes(parsedUrl.hostname)) {
-        handleShortenedLink(decodedUrl); // Call the unshortener server
-        return;
-      }
-    } catch (e) {
-      console.warn(
-        "[DEVScan] URL parsing failed, using original:",
-        decodedUrl,
-        e
-      );
-      return decodedUrl; //return the original url if there is an error in the unshortener server
     }
 
     // ENHANCED DEDUPLICATION: Check multiple conditions

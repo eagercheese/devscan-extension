@@ -1,3 +1,6 @@
+// background.js
+import { decodeHexUrl, resolveShortenedUrl } from "./utils.js";
+
 // ==============================
 // DEVSCAN BACKGROUND SCRIPT
 // ==============================
@@ -512,96 +515,34 @@ async function handleExtractLinks(maliciousUrl) {
   }
 }
 
-async function unshortenLink(shortUrl) {
-  try {
-    const { serverUrl } = await chrome.storage.sync.get("serverUrl");
-    const baseUrl = serverUrl || "http://localhost:3001";
-
-    // Create timeout promise
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Unshorten request timeout')), 8000);
-    });
-
-    const fetchPromise = fetch(`${baseUrl}/api/unshortened-links`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: shortUrl })
-    });
-
-    const response = await Promise.race([fetchPromise, timeoutPromise]);
-
-    if (!response.ok) {
-      console.warn(`[DEVScan] Unshortener returned status ${response.status} → using original`);
-      return shortUrl;
-    }
-
-    const data = await response.json();
-    if (data && data.success && data.url) {
-      return data.url;
-    }
-
-    return shortUrl;
-  } catch (error) {
-    console.error(`[DEVScan] Unshortener failed for ${shortUrl}:`, error);
-    return shortUrl;
-  }
-}
 
 // ==============================
-// WARNING PAGE INTERACTION
+// URL Interception & Analysis
 // ==============================
 
 // Intercept URLs before they load to check if malicious
 let maliciousUrls = new Set(); // Store intercepted URLs identified as malicious
-const safeBypassed = new Set();
-const shortenedPatterns = [
-  'bit.ly',
-  't.co',
-  'tinyurl.com',
-  'goo.gl',
-  'is.gd',
-  'buff.ly',
-  'cutt.ly',
-  'ow.ly',
-  'rebrand.ly'
-];
+const safeBypassed = new Set(); // Store URLs marked safe to skip re-scanning
 
 // Function to add malicious URLs to intercept list
 function addMaliciousUrl(url) {
   maliciousUrls.add(url);
+  setTimeout(() => maliciousUrls.delete(url), 60000);
   console.log(`[DEVScan Background] Added ${url} to malicious intercept list`);
 }
 
-// Function to detect if URL is shortened and unshorten it recursively
-async function resolveShortenedUrl(url, details) {
-  try {
-    const parsedUrl = new URL(url);
-
-    if (shortenedPatterns.includes(parsedUrl.hostname) && !details._unshortened) {
-      const resolvedUrl = await unshortenLink(url);
-      console.log("[DEVScan] Resolved shortened link →", resolvedUrl);
-
-      // Mark as unshortened to avoid infinite recursion
-      details._unshortened = true;
-
-      // Recursively resolve again in case the resolved URL is also shortened
-      return resolveShortenedUrl(resolvedUrl, details);
-    }
-  } catch (e) {
-    console.warn("[DEVScan] URL parsing failed in unshorten step:", url, e);
-    return url;
-  }
-
-  // Return the original or resolved URL if no further unshortening needed
-  return url;
+// Temporary safe bypass for URLs marked safe to avoid re-scanning in short term
+const SAFE_BYPASS_TTL = 10 * 60 * 1000; // 10 minutes
+function addSafeBypass(url) {
+  safeBypassed.add(url);
+  setTimeout(() => safeBypassed.delete(url), SAFE_BYPASS_TTL);
 }
 
 async function interceptURL(url, details) {
   console.log("[DEVScan Intercepted] URL:", url);
 
   // Hex Decoder of the intercepted link
-  const decodedUrl = decodeURIComponent(url);
-  console.log("[DEVScan] Decoded URL:", decodedUrl);
+  const decodedUrl = decodeHexUrl(details.url);
 
   // Conditional link unshortening
   const resolvedUrl = await resolveShortenedUrl(decodedUrl, details);
@@ -650,6 +591,7 @@ async function interceptURL(url, details) {
   chrome.tabs.update(details.tabId, {
     url: chrome.runtime.getURL(`html/ScanningPage.html?url=${encodeURIComponent(url)}`)
   });
+
   // Fix logic: redirect when verdict is malicious or anomalous
   if (verdict === "malicious" || verdict === "anomalous") {
     console.log("[DEVScan] Risky verdict, redirecting to warning page...");
@@ -684,11 +626,10 @@ async function interceptURL(url, details) {
   } else {
     // Safe verdict → go to actual site
     chrome.tabs.update(details.tabId, { url: resolvedUrl });
-    safeBypassed.add(resolvedUrl); // Safe to the temporary Set
+    addSafeBypass(resolvedUrl); // Safe to the temporary Set
   }
 
 }
-
 
 
 function shouldIntercept(details) {
@@ -697,7 +638,7 @@ function shouldIntercept(details) {
 
     // Skip yung errors HAHAHAHA
     if (u.hostname.endsWith("google.com")) {
-      // if (u.pathname.startsWith("/search")) return false; // any Google search results - for future use
+      if (u.pathname.startsWith("/search")) return false; // any Google search results - for future use
       if (u.searchParams.has("tbm") || u.searchParams.has("udm")) return false; // AI/images/news
     }
 
