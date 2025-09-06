@@ -1,3 +1,4 @@
+//warning.js
 const params = new URLSearchParams(location.search);
 const original = params.get("url");
 const openerTabId = parseInt(params.get("openerTabId"));
@@ -76,3 +77,20 @@ if (legacyBackBtn) {
   };
 }
 
+
+// Scanning page logic
+// Only run if this is the scanning page (check for unique class)
+const isScanningPage = !!document.querySelector(".scanning-popup-content");
+if (isScanningPage) {
+  // Show scanning page after 2s
+  setTimeout(() => {
+    document.body.style.display = "block";
+  }, 2000);
+
+  //listen for messages to show progress/UI
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.action === "verdictReady") {
+      console.log("[DEVScan] Verdict received in ScanningPage:", msg.verdict);
+    }
+  });
+}
