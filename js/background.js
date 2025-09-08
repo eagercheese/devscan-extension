@@ -555,9 +555,15 @@ async function interceptURL(url, details) {
   // Conditional link unshortening
   const resolvedUrl = await resolveShortenedUrl(decodedUrl, details);
 
+  // If this URL is proceeded by user recently, skip scanning
+  if (proceedURLS.has(resolvedUrl)) {
+    console.log("[DEVScan] Skipping re-scan of safe URL:", resolvedUrl);
+    return;
+  }
+
   // If this URL is already marked safe, skip scanning
-  if (safeBypassed.has(url)) {
-    console.log("[DEVScan] Skipping re-scan of safe URL:", url);
+  if (safeBypassed.has(resolvedUrl)) {
+    console.log("[DEVScan] Skipping re-scan of safe URL:", resolvedUrl);
     return;
   }
   // Check if the URL is allowed to bypass the warning by the user
