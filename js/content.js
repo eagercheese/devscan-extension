@@ -692,6 +692,12 @@ function showScanningPopup() {
       } else {
         console.warn('[DEVScan] No valid link found to proceed to');
       }
+
+      // Notify background that this URL is allowed in InterceptURL
+      chrome.runtime.sendMessage({
+        action: "allowLinkBypass",
+        url: clickedLink.href
+      });
       
       // Clear the bypass flag and stored link after navigation
       setTimeout(() => {

@@ -298,6 +298,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ success: true });
     return true;
   }
+
+  else if (message.action === "allowLinkBypass" && message.url) {
+    proceedURLS.add(message.url);
+    setTimeout(() => proceedURLS.delete(message.url), 60000);
+    sendResponse({ success: true });
+    return true;
+  }
   
   else if (message.action === "closeAndSwitchBack" && sender.tab?.id) {
     chrome.tabs.remove(sender.tab.id, () => {
@@ -521,6 +528,7 @@ async function handleExtractLinks(maliciousUrl) {
 // ==============================
 
 // Intercept URLs before they load to check if malicious
+let proceedURLS = new Set(); // Store URLs allowed to proceed without warning
 let maliciousUrls = new Set(); // Store intercepted URLs identified as malicious
 const safeBypassed = new Set(); // Store URLs marked safe to skip re-scanning
 
