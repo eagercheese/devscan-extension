@@ -9,6 +9,53 @@
 console.log("[DEVScan] Content script loaded on:", window.location.href);
 
 // ==============================
+// URL UTILITY FUNCTIONS (EMBEDDED FOR RELIABILITY)
+// ==============================
+
+function decodeHexUrl(url) {
+  try {
+    const decoded = decodeURIComponent(url);
+    console.log("[DEVScan] Decoded URL:", decoded);
+    return decoded;
+  } catch (e) {
+    console.warn("[DEVScan] Hex decode failed:", url, e);
+    return url;
+  }
+}
+
+async function resolveShortenedUrl(url, details = {}) {
+  const shortenedPatterns = [
+    'bit.ly', 't.co', 'tinyurl.com', 'goo.gl', 'is.gd', 
+    'buff.ly', 'cutt.ly', 'ow.ly', 'rebrand.ly'
+  ];
+  
+  try {
+    const parsedUrl = new URL(url);
+
+    if (shortenedPatterns.includes(parsedUrl.hostname) && !details._unshortened) {
+      console.log("[DEVScan] Detected shortened URL, but skipping unshortening in content script:", url);
+      return url;
+    }
+  } catch (e) {
+    console.warn("[DEVScan] URL parsing failed in unshorten step:", url, e);
+    return url;
+  }
+
+  return url;
+}
+
+// Make functions available globally
+window.decodeHexUrl = decodeHexUrl;
+window.resolveShortenedUrl = resolveShortenedUrl;
+
+console.log('[DEVScan] URL utility functions loaded:', {
+  decodeHexUrl: typeof decodeHexUrl,
+  resolveShortenedUrl: typeof resolveShortenedUrl,
+  window_decodeHexUrl: typeof window.decodeHexUrl,
+  window_resolveShortenedUrl: typeof window.resolveShortenedUrl
+});
+
+// ==============================
 // GLOBAL STATE MANAGEMENT (MOVED TO TOP)
 // ==============================
 
@@ -191,8 +238,10 @@ function processLink(link) {
 // Collect links for analysis and manage batching to server
 async function collectLinkForAnalysis(rawUrl, details = {}) {
   try {
-    //Hex Decoder
+    // Hex Decoder - now guaranteed to be available
     const decodedUrl = decodeHexUrl(rawUrl);
+    
+    // URL unshortening - now guaranteed to be available
     const resolvedUrl = await resolveShortenedUrl(decodedUrl, details);
 
     // Skip browser internal URLs and special protocols
@@ -218,6 +267,7 @@ async function collectLinkForAnalysis(rawUrl, details = {}) {
     pageProcessedLinks.add(resolvedUrl);
 
     // Send individual link for immediate analysis
+    console.log(`[DEVScan] 🔧 DEBUG: About to call analyzeSingleLink for: ${resolvedUrl}`);
     analyzeSingleLink(resolvedUrl);
   } catch (e) {
     console.warn("[DEVScan] Failed to decode URL:", rawUrl, e);
@@ -226,6 +276,7 @@ async function collectLinkForAnalysis(rawUrl, details = {}) {
 
 // Analyze a single link immediately
 function analyzeSingleLink(url) {
+  console.log(`[DEVScan] 🚀 analyzeSingleLink CALLED for: ${url}`);
   const currentDomain = window.location.hostname;
   
   console.log(`[DEVScan] 🔍 Starting analysis for: ${url}`);
@@ -242,8 +293,10 @@ function analyzeSingleLink(url) {
   console.log(`[DEVScan] 📤 Sending message to background:`, message);
   console.log(`[DEVScan] 🔧 DEBUG: chrome.runtime available:`, !!chrome.runtime);
   console.log(`[DEVScan] 🔧 DEBUG: sendMessage function available:`, !!chrome.runtime.sendMessage);
+  console.log(`[DEVScan] 🔧 DEBUG: About to call chrome.runtime.sendMessage...`);
 
   chrome.runtime.sendMessage(message, (response) => {
+    console.log(`[DEVScan] 🔧 DEBUG: Message sent, checking response...`);
     if (chrome.runtime.lastError) {
       console.error(`[DEVScan] Error sending message:`, chrome.runtime.lastError);
     } else {
@@ -351,7 +404,14 @@ function isSameDomain(url1, url2) {
 }
 
 // Update tooltip display for a specific URL with new verdict
-function updateLinkTooltip(url, verdict) {
+function updateLinkTooltip(url, verdict, verdictData = null) {
+  console.log(`[DEVScan Content] 🔧 DEBUG: updateLinkTooltip called with:`, {
+    url,
+    verdict,
+    verdictType: typeof verdict,
+    hasVerdictData: verdictData !== null
+  });
+  
   // Try multiple selection approaches
   let links = document.querySelectorAll(`a[href="${url}"]`);
 
@@ -404,21 +464,51 @@ function updateLinkTooltip(url, verdict) {
     console.log('[DEVScan Content] 🔧 DEBUG: Processing verdict for link:', {
       url: link.href,
       verdict: verdict,
-      verdictType: typeof verdict
+      verdictType: typeof verdict,
+      hasVerdictData: verdictData !== null
     });
     
-    // If verdict is an object, update all fields
+    // Always use the converted verdict string for risk level
     let riskLevel = verdict;
-    if (typeof verdict === 'object' && verdict !== null) {
-      console.log('[DEVScan Content] 🔧 DEBUG: Storing ML object data:', verdict);
-      // Store all fields in dataset
+    
+    // If we have rich verdict data, store it for tooltips
+    if (verdictData && typeof verdictData === 'object') {
+      console.log('[DEVScan Content] 🔧 DEBUG: Storing rich ML data from verdictData:', verdictData);
+      // Store all fields in dataset from the rich data
+      link.dataset.finalVerdict = verdictData.final_verdict || '';
+      link.dataset.confidence = verdictData.confidence_score != null ? verdictData.confidence_score : '';
+      link.dataset.anomalyRisk = verdictData.anomaly_risk_level || '';
+      link.dataset.explanation = verdictData.explanation || '';
+      link.dataset.tip = verdictData.tip || '';
+      
+      // Use the already converted verdict string for risk level (from background script conversion)
+      console.log('[DEVScan Content] 🔧 DEBUG: Using converted verdict for risk level:', verdict);
+      riskLevel = verdict;
+    } else if (typeof verdict === 'object' && verdict !== null) {
+      // Legacy: if verdict is still an object (shouldn't happen with new code)
+      console.log('[DEVScan Content] 🔧 DEBUG: Legacy: verdict is object, extracting fields:', verdict);
       link.dataset.finalVerdict = verdict.final_verdict || '';
       link.dataset.confidence = verdict.confidence_score != null ? verdict.confidence_score : '';
       link.dataset.anomalyRisk = verdict.anomaly_risk_level || '';
       link.dataset.explanation = verdict.explanation || '';
       link.dataset.tip = verdict.tip || '';
-      riskLevel = verdict.final_verdict || 'scanning';
+      
+      // Convert raw final_verdict to risk level format (fallback)
+      const rawVerdict = verdict.final_verdict || '';
+      if (rawVerdict.toLowerCase().includes('scan failed')) {
+        riskLevel = 'scan_failed';
+      } else if (rawVerdict.toLowerCase().includes('safe')) {
+        riskLevel = 'safe';
+      } else if (rawVerdict.toLowerCase().includes('malicious')) {
+        riskLevel = 'malicious';
+      } else if (rawVerdict.toLowerCase().includes('anomalous')) {
+        riskLevel = 'anomalous';
+      } else {
+        riskLevel = 'scanning';
+      }
+      console.log('[DEVScan Content] 🔧 DEBUG: Converted raw verdict to risk level:', riskLevel);
     } else {
+      // String verdict - store as basic data
       console.log('[DEVScan Content] 🔧 DEBUG: Storing string verdict:', verdict);
       link.dataset.finalVerdict = verdict;
       link.dataset.confidence = '';
@@ -439,12 +529,19 @@ function updateLinkTooltip(url, verdict) {
     // Always force refresh if verdict actually changed
     const currentRisk = link.dataset.devscanRisk;
     const needsUpdate = currentRisk !== riskLevel;
+    console.log(`[DEVScan Content] 🔧 DEBUG: Link update check:`, {
+      url: link.href,
+      currentRisk,
+      newRiskLevel: riskLevel,
+      needsUpdate
+    });
     console.log(`[DEVScan] Updating link ${url} from ${currentRisk} to ${riskLevel}`);
     if (needsUpdate) {
       delete link.dataset.tooltipBound;
       delete link.dataset.devscanStyled;
     }
     link.dataset.devscanRisk = riskLevel;
+    console.log(`[DEVScan Content] 🔧 DEBUG: After assignment, link.dataset.devscanRisk =`, link.dataset.devscanRisk);
 
     // Always reattach tooltip for fresh state
     if (typeof window.attachRiskTooltip === 'function') {
@@ -976,6 +1073,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
     console.log(`[DEVScan Content] 📨 Received verdict for ${url}: ${verdict}`);
     console.log(`[DEVScan Content] 🔧 DEBUG: Verdict data:`, verdictData);
+    console.log(`[DEVScan Content] 🔧 DEBUG: isValidSecurityVerdict(${verdict}):`, isValidSecurityVerdict(verdict));
     console.log(`[DEVScan Content] Current linkVerdicts state:`, Array.from(linkVerdicts.entries()));
     console.log(`[DEVScan Content] Current collectedLinks state:`, Array.from(collectedLinks));
 
@@ -1011,10 +1109,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         link.dataset.riskLabel = verdict; // Store the simplified verdict too
       });
       
-      // Update tooltip with full verdict object for rich data
-      console.log(`[DEVScan Content] 🔧 DEBUG: Calling updateLinkTooltip with verdictData object`);
-      const updateSuccess = updateLinkTooltip(url, verdictData);
-      console.log(`[DEVScan Content] ${updateSuccess ? '✅' : '❌'} Tooltip update for ${url} with full data`);
+      // Update tooltip with converted verdict string but pass verdictData for rich tooltip info
+      console.log(`[DEVScan Content] 🔧 DEBUG: Calling updateLinkTooltip with converted verdict: ${verdict} and verdictData for rich info`);
+      const updateSuccess = updateLinkTooltip(url, verdict, verdictData);
+      console.log(`[DEVScan Content] ${updateSuccess ? '✅' : '❌'} Tooltip update for ${url} with converted verdict and rich data`);
     } else {
       // Fallback to string verdict if no rich data
       console.log(`[DEVScan Content] 🔧 DEBUG: Calling updateLinkTooltip with string verdict: ${verdict}`);
@@ -1239,3 +1337,9 @@ if (document.readyState === "loading") {
   // DOM is already ready
   initializeExtension();
 }
+
+// Test URL functions
+console.log('🧪 Testing content script URL functions:');
+const testUrl = 'https%3A//example.com/test';
+console.log('  - decodeHexUrl test:', decodeHexUrl(testUrl));
+console.log('  - resolveShortenedUrl available:', typeof resolveShortenedUrl === 'function');

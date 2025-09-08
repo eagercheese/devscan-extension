@@ -1,5 +1,58 @@
 // background.js
-import { decodeHexUrl, resolveShortenedUrl } from "./url-utils.js";
+
+// Verify service worker environment
+if (typeof self === 'undefined') {
+  console.error('[DEVScan] This script must run in a service worker context');
+}
+
+console.log('[DEVScan] Service worker starting up...');
+
+// URL utility functions (embedded for reliability)
+function decodeHexUrl(url) {
+  try {
+    const decoded = decodeURIComponent(url);
+    console.log("[DEVScan] Decoded URL:", decoded);
+    return decoded;
+  } catch (e) {
+    console.warn("[DEVScan] Hex decode failed:", url, e);
+    return url;
+  }
+}
+
+async function resolveShortenedUrl(url, details = {}) {
+  const shortenedPatterns = [
+    'bit.ly', 't.co', 'tinyurl.com', 'goo.gl', 'is.gd', 
+    'buff.ly', 'cutt.ly', 'ow.ly', 'rebrand.ly'
+  ];
+  
+  try {
+    const parsedUrl = new URL(url);
+
+    if (shortenedPatterns.includes(parsedUrl.hostname) && !details._unshortened) {
+      // For now, just return the original URL since unshortening requires server
+      console.log("[DEVScan] Detected shortened URL, but skipping unshortening:", url);
+      return url;
+    }
+  } catch (e) {
+    console.warn("[DEVScan] URL parsing failed in unshorten step:", url, e);
+    return url;
+  }
+
+  return url;
+}
+
+// Import URL utilities for service worker (as backup)
+try {
+  importScripts('./js/url-utils.js');
+  console.log('[DEVScan] Successfully loaded url-utils.js');
+} catch (e) {
+  console.warn('[DEVScan] Failed to import url-utils.js, using embedded functions:', e.message);
+}
+
+console.log('[DEVScan] Background script URL utility functions available:', {
+  decodeHexUrl: typeof decodeHexUrl,
+  resolveShortenedUrl: typeof resolveShortenedUrl
+});
 
 // ==============================
 // DEVSCAN BACKGROUND SCRIPT
@@ -7,6 +60,499 @@ import { decodeHexUrl, resolveShortenedUrl } from "./url-utils.js";
 // Service worker for the DEVScan browser extension
 // Handles extension lifecycle, server communication, and inter-tab messaging
 // Manages scan sessions and coordinates between content scripts and server
+
+// ==============================
+// SERVER CONNECTION MANAGEMENT
+// ==============================
+
+class ServerConnectionManager {
+  constructor() {
+    this.serverUrl = null;
+    this.lastHealthCheck = 0;
+    this.isHealthy = false;
+    this.healthCheckInterval = 300000; // 5 minutes
+  }
+
+  async ensureConnection() {
+    const now = Date.now();
+    
+    // Check health periodically
+    if (now - this.lastHealthCheck > this.healthCheckInterval) {
+      await this.healthCheck();
+    }
+
+    if (!this.isHealthy) {
+      await this.findServer();
+    }
+
+    return this.serverUrl;
+  }
+
+  async healthCheck() {
+    if (!this.serverUrl) return false;
+    
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+      
+      const response = await fetch(`${this.serverUrl}/api/health`, {
+        method: 'GET',
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      this.isHealthy = response.ok;
+      this.lastHealthCheck = Date.now();
+      
+      if (this.isHealthy) {
+        console.log('[DEVScan] 💚 Server health check: OK');
+      } else {
+        console.warn(`[DEVScan] 💛 Server responded with status: ${response.status}`);
+      }
+      
+      return this.isHealthy;
+    } catch (error) {
+      this.isHealthy = false;
+      console.warn('[DEVScan] ❤️ Server health check failed:', error.message);
+      return false;
+    }
+  }
+
+  async findServer() {
+    const possibleUrls = [
+      'http://localhost:3001',
+      'http://localhost:3000', 
+      'http://127.0.0.1:3001',
+      'http://127.0.0.1:3000'
+    ];
+
+    console.log('[DEVScan] 🔍 Searching for DEVScan server...');
+
+    for (const url of possibleUrls) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout per attempt
+        
+        const response = await fetch(`${url}/api/health`, { 
+          signal: controller.signal 
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (response.ok) {
+          this.serverUrl = url;
+          this.isHealthy = true;
+          this.lastHealthCheck = Date.now();
+          
+          // Store successful URL
+          await chrome.storage.sync.set({ serverUrl: url });
+          console.log(`[DEVScan] ✅ Found server at: ${url}`);
+          return url;
+        }
+      } catch (e) {
+        console.log(`[DEVScan] 🔍 Server not found at ${url}: ${e.message}`);
+        continue;
+      }
+    }
+
+    this.isHealthy = false;
+    throw new Error('DEVScan server not found on any port. Please ensure the server is running.');
+  }
+
+  getConnectionInfo() {
+    return {
+      serverUrl: this.serverUrl,
+      isHealthy: this.isHealthy,
+      lastHealthCheck: this.lastHealthCheck,
+      nextHealthCheck: this.lastHealthCheck + this.healthCheckInterval
+    };
+  }
+}
+
+// Global connection manager instance
+const connectionManager = new ServerConnectionManager();
+
+// ==============================
+// ENHANCED URL MATCHING SYSTEM
+// ==============================
+
+// Normalize URL for consistent matching
+function normalizeUrl(url) {
+  if (!url || typeof url !== 'string') return '';
+  
+  try {
+    // Remove trailing slashes, normalize case, decode components
+    let normalized = decodeURIComponent(url.trim())
+      .toLowerCase()
+      .replace(/\/+$/, '')
+      .replace(/^https?:\/\//, ''); // Remove protocol for comparison
+    
+    // Remove www prefix for domain comparison
+    normalized = normalized.replace(/^www\./, '');
+    
+    return normalized;
+  } catch (e) {
+    // If decoding fails, just do basic normalization
+    return url.trim().toLowerCase().replace(/\/+$/, '');
+  }
+}
+
+// Extract domain from URL
+function extractDomain(url) {
+  if (!url || typeof url !== 'string') return '';
+  
+  try {
+    const urlObj = new URL(url.startsWith('http') ? url : `http://${url}`);
+    return urlObj.hostname.replace(/^www\./, '').toLowerCase();
+  } catch (e) {
+    // Fallback: extract domain manually
+    const match = url.match(/^(?:https?:\/\/)?(?:www\.)?([^\/]+)/i);
+    return match ? match[1].toLowerCase() : '';
+  }
+}
+
+// Enhanced URL matching with multiple strategies
+function findVerdictForUrl(url, serverVerdicts) {
+  if (!serverVerdicts || typeof serverVerdicts !== 'object') {
+    return null;
+  }
+
+  const strategies = [
+    // Strategy 1: Exact match
+    (u, verdicts) => verdicts[u],
+    
+    // Strategy 2: Normalized match (trailing slash, case, protocol)
+    (u, verdicts) => {
+      const normalized = normalizeUrl(u);
+      return verdicts[normalized] || Object.entries(verdicts)
+        .find(([key]) => normalizeUrl(key) === normalized)?.[1];
+    },
+    
+    // Strategy 3: Domain-based match for redirects
+    (u, verdicts) => {
+      const domain = extractDomain(u);
+      if (!domain) return null;
+      
+      return Object.entries(verdicts)
+        .find(([key]) => extractDomain(key) === domain)?.[1];
+    },
+    
+    // Strategy 4: Decoded URL match
+    (u, verdicts) => {
+      try {
+        const decoded = decodeURIComponent(u);
+        return verdicts[decoded];
+      } catch { 
+        return null; 
+      }
+    },
+    
+    // Strategy 5: Base URL match (without query params)
+    (u, verdicts) => {
+      const baseUrl = u.split('?')[0].split('#')[0];
+      return verdicts[baseUrl] || Object.entries(verdicts)
+        .find(([key]) => key.split('?')[0].split('#')[0] === baseUrl)?.[1];
+    }
+  ];
+
+  // Try each strategy until we find a match
+  for (let i = 0; i < strategies.length; i++) {
+    const strategy = strategies[i];
+    const result = strategy(url, serverVerdicts);
+    
+    if (result) {
+      console.log(`[DEVScan Background] 🎯 Found verdict using strategy ${i + 1} for ${url}`);
+      return result;
+    }
+  }
+  
+  console.log(`[DEVScan Background] ❌ No verdict found for ${url} using any strategy`);
+  return null;
+}
+
+// ==============================
+// VERDICT CACHING SYSTEM
+// ==============================
+
+class VerdictCache {
+  constructor() {
+    this.cache = new Map();
+    this.sessionCache = new Map(); // Per-session cache
+    this.cleanupInterval = setInterval(() => this.cleanup(), 60000); // Cleanup every minute
+  }
+  
+  set(url, verdict, sessionId = null, ttl = 300000) { // 5 min default TTL
+    const entry = {
+      verdict,
+      timestamp: Date.now(),
+      ttl,
+      sessionId
+    };
+    
+    this.cache.set(url, entry);
+    
+    if (sessionId) {
+      if (!this.sessionCache.has(sessionId)) {
+        this.sessionCache.set(sessionId, new Map());
+      }
+      this.sessionCache.get(sessionId).set(url, entry);
+    }
+    
+    console.log(`[DEVScan Background] 💾 Cached verdict for ${url}: ${verdict}`);
+  }
+  
+  get(url, sessionId = null) {
+    // Try session cache first (higher priority)
+    if (sessionId && this.sessionCache.has(sessionId)) {
+      const sessionEntry = this.sessionCache.get(sessionId).get(url);
+      if (sessionEntry && this.isValid(sessionEntry)) {
+        console.log(`[DEVScan Background] 🎯 Cache HIT (session) for ${url}: ${sessionEntry.verdict}`);
+        return sessionEntry.verdict;
+      }
+    }
+    
+    // Fallback to global cache
+    const entry = this.cache.get(url);
+    if (entry && this.isValid(entry)) {
+      console.log(`[DEVScan Background] 🎯 Cache HIT (global) for ${url}: ${entry.verdict}`);
+      return entry.verdict;
+    }
+    
+    console.log(`[DEVScan Background] 🎯 Cache MISS for ${url}`);
+    return null;
+  }
+  
+  isValid(entry) {
+    return Date.now() - entry.timestamp < entry.ttl;
+  }
+  
+  cleanup() {
+    const now = Date.now();
+    let cleaned = 0;
+    
+    // Clean global cache
+    for (const [url, entry] of this.cache) {
+      if (!this.isValid(entry)) {
+        this.cache.delete(url);
+        cleaned++;
+      }
+    }
+    
+    // Clean session caches
+    for (const [sessionId, sessionMap] of this.sessionCache) {
+      for (const [url, entry] of sessionMap) {
+        if (!this.isValid(entry)) {
+          sessionMap.delete(url);
+          cleaned++;
+        }
+      }
+      
+      // Remove empty session maps
+      if (sessionMap.size === 0) {
+        this.sessionCache.delete(sessionId);
+      }
+    }
+    
+    if (cleaned > 0) {
+      console.log(`[DEVScan Background] 🧹 Cleaned ${cleaned} expired cache entries`);
+    }
+  }
+  
+  getStats() {
+    return {
+      globalEntries: this.cache.size,
+      sessions: this.sessionCache.size,
+      totalSessionEntries: Array.from(this.sessionCache.values())
+        .reduce((sum, map) => sum + map.size, 0)
+    };
+  }
+}
+
+// Global verdict cache instance
+const verdictCache = new VerdictCache();
+
+// ==============================
+// DIAGNOSTICS & MONITORING
+// ==============================
+
+class VerdictDeliveryDiagnostics {
+  constructor() {
+    this.stats = {
+      sent: 0,
+      delivered: 0,
+      failed: 0,
+      retries: 0,
+      averageDeliveryTime: 0,
+      cacheHits: 0,
+      cacheMisses: 0
+    };
+    this.errors = [];
+    this.maxErrors = 50; // Keep last 50 errors
+  }
+  
+  logDeliveryAttempt(url, tabId, startTime) {
+    this.stats.sent++;
+    
+    return {
+      success: () => {
+        this.stats.delivered++;
+        const deliveryTime = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - startTime;
+        this.updateAverageDeliveryTime(deliveryTime);
+        
+        if (deliveryTime > 1000) { // Log slow deliveries
+          console.warn(`[DEVScan Background] 🐌 Slow delivery (${deliveryTime.toFixed(2)}ms): ${url}`);
+        }
+      },
+      failure: (error) => {
+        this.stats.failed++;
+        this.errors.push({
+          url,
+          tabId,
+          error: error.message,
+          timestamp: new Date().toISOString(),
+          stack: error.stack
+        });
+        
+        // Keep only recent errors
+        if (this.errors.length > this.maxErrors) {
+          this.errors = this.errors.slice(-this.maxErrors);
+        }
+      },
+      retry: () => {
+        this.stats.retries++;
+      }
+    };
+  }
+  
+  logCacheEvent(hit = true) {
+    if (hit) {
+      this.stats.cacheHits++;
+    } else {
+      this.stats.cacheMisses++;
+    }
+  }
+  
+  updateAverageDeliveryTime(newTime) {
+    const totalDelivered = this.stats.delivered;
+    this.stats.averageDeliveryTime = 
+      ((this.stats.averageDeliveryTime * (totalDelivered - 1)) + newTime) / totalDelivered;
+  }
+  
+  getReport() {
+    const successRate = this.stats.sent > 0 
+      ? (this.stats.delivered / this.stats.sent * 100).toFixed(2) 
+      : '0.00';
+    
+    const cacheHitRate = (this.stats.cacheHits + this.stats.cacheMisses) > 0
+      ? (this.stats.cacheHits / (this.stats.cacheHits + this.stats.cacheMisses) * 100).toFixed(2)
+      : '0.00';
+    
+    return {
+      ...this.stats,
+      successRate: `${successRate}%`,
+      cacheHitRate: `${cacheHitRate}%`,
+      averageDeliveryTime: `${this.stats.averageDeliveryTime.toFixed(2)}ms`,
+      recentErrors: this.errors.slice(-10),
+      cacheStats: verdictCache.getStats()
+    };
+  }
+  
+  // Console command to check diagnostics
+  logReport() {
+    const report = this.getReport();
+    console.group('🔍 DEVScan Verdict Delivery Diagnostics');
+    console.log('📊 Performance Stats:', {
+      sent: report.sent,
+      delivered: report.delivered,
+      failed: report.failed,
+      retries: report.retries,
+      successRate: report.successRate,
+      averageDeliveryTime: report.averageDeliveryTime
+    });
+    console.log('💾 Cache Stats:', {
+      hits: report.cacheHits,
+      misses: report.cacheMisses,
+      hitRate: report.cacheHitRate,
+      ...report.cacheStats
+    });
+    if (report.recentErrors.length > 0) {
+      console.warn('⚠️ Recent Errors:', report.recentErrors);
+    }
+    console.groupEnd();
+  }
+}
+
+// Global diagnostics instance
+const diagnostics = new VerdictDeliveryDiagnostics();
+
+// Make diagnostics available globally for debugging
+self.DEVScanDiagnostics = diagnostics;
+
+// ==============================
+// VERDICT DELIVERY SYSTEM
+// ==============================
+
+// Enhanced message delivery with acknowledgment and retry logic
+function sendVerdictWithAck(tabId, url, verdict, verdictData = null, retryCount = 0) {
+  const maxRetries = 3;
+  const messageId = Date.now() + Math.random();
+  const startTime = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  
+  return new Promise((resolve, reject) => {
+    const logger = diagnostics.logDeliveryAttempt(url, tabId, startTime);
+    
+    if (retryCount > 0) {
+      logger.retry();
+      console.log(`[DEVScan Background] � Retry ${retryCount}/${maxRetries} for ${url}`);
+    } else {
+      console.log(`[DEVScan Background] 📤 Sending verdict: ${url} -> ${verdict}`);
+    }
+    
+    chrome.tabs.sendMessage(tabId, {
+      action: "updateSingleLinkVerdict",
+      url: url,
+      verdict: verdict,
+      verdictData: verdictData,
+      messageId: messageId
+    }, (response) => {
+      if (chrome.runtime.lastError) {
+        const error = new Error(chrome.runtime.lastError.message);
+        console.warn(`[DEVScan Background] ⚠️ Message failed (attempt ${retryCount + 1}):`, error.message);
+        
+        if (retryCount < maxRetries) {
+          const delay = 1000 * Math.pow(2, retryCount); // Exponential backoff
+          console.log(`[DEVScan Background] 🔄 Retrying in ${delay}ms...`);
+          
+          setTimeout(() => {
+            sendVerdictWithAck(tabId, url, verdict, verdictData, retryCount + 1)
+              .then(resolve).catch(reject);
+          }, delay);
+        } else {
+          console.error(`[DEVScan Background] ❌ Max retries exceeded for ${url}`);
+          logger.failure(error);
+          reject(error);
+        }
+      } else if (response && response.success) {
+        console.log(`[DEVScan Background] ✅ Verdict delivered: ${url} -> ${verdict}`);
+        logger.success();
+        resolve(response);
+      } else {
+        const error = new Error(`Message not acknowledged: ${JSON.stringify(response)}`);
+        console.warn(`[DEVScan Background] ⚠️ Message not acknowledged for ${url}:`, response);
+        
+        if (retryCount < maxRetries) {
+          setTimeout(() => {
+            sendVerdictWithAck(tabId, url, verdict, verdictData, retryCount + 1)
+              .then(resolve).catch(reject);
+          }, 1000 * (retryCount + 1));
+        } else {
+          logger.failure(error);
+          reject(error);
+        }
+      }
+    });
+  });
+}
 
 // ==============================
 // ML VERDICT CONVERSION
@@ -164,10 +710,11 @@ chrome.runtime.onStartup.addListener(() => {
 // ==============================
 // SERVER HEALTH CHECK
 // ==============================
+// Check server health status
 async function checkServerHealth() {
   try {
-    const { serverUrl } = await chrome.storage.sync.get("serverUrl");
-    const baseUrl = serverUrl || "http://localhost:3001";
+    // Use connection manager instead of manual server URL handling
+    const baseUrl = await connectionManager.ensureConnection();
 
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => reject(new Error('Health check timeout')), 8000); // Increased to 8 seconds
@@ -201,11 +748,11 @@ async function checkServerHealth() {
 // Create a new scan session on the server
 async function createNewScanSession() {
   try {
-    const { serverUrl } = await chrome.storage.sync.get("serverUrl");
-    const baseUrl = serverUrl || "http://localhost:3001";
+    // Use connection manager for reliable server connection
+    const baseUrl = await connectionManager.ensureConnection();
 
-    // Get browser info for session tracking
-    const browserInfo = `Chrome Extension v4.0 - ${navigator.userAgent || 'Unknown Browser'}`;
+    // Get browser info for session tracking (service worker compatible)
+    const browserInfo = `Chrome Extension v4.0 - Service Worker`;
     const engineVersion = "DEVSCAN-4.0";
 
     // Create timeout promise
@@ -251,6 +798,9 @@ async function createNewScanSession() {
 
 // Handle messages from content scripts and popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  console.log(`[DEVScan Background] 📨 Received message:`, message);
+  console.log(`[DEVScan Background] 🔧 DEBUG: Sender:`, sender);
+  console.log(`[DEVScan Background] 🔧 DEBUG: Message action:`, message.action);
   if (message.action === "test") {
     sendResponse({ success: true, reply: "Background script is working!" });
     return true;
@@ -377,18 +927,44 @@ async function handleSingleLinkAnalysis(url, domain, providedSessionId, tabId) {
   try {
     console.log(`[DEVScan Background] 🔍 Starting analysis for: ${url}`);
     
+    // Check cache first to avoid unnecessary server requests
+    const cachedVerdict = verdictCache.get(url, providedSessionId);
+    if (cachedVerdict) {
+      console.log(`[DEVScan Background] 🎯 Using cached verdict for ${url}: ${cachedVerdict}`);
+      diagnostics.logCacheEvent(true); // Cache hit
+      await sendVerdictWithAck(tabId, url, cachedVerdict);
+      return { verdict: cachedVerdict, reason: 'cached' };
+    } else {
+      diagnostics.logCacheEvent(false); // Cache miss
+    }
+    
     // SAME-DOMAIN FILTERING: Skip analysis for same-domain links
     if (isSameDomain(url, `https://${domain}`)) {
       console.log(`[DEVScan Background] ⏭️  Skipping same-domain link: ${url} (matches ${domain})`);
+      
+      // Cache the same-domain result
+      verdictCache.set(url, 'safe', providedSessionId, 600000); // 10 minute TTL for same-domain
+      await sendVerdictWithAck(tabId, url, 'safe');
       return { verdict: 'safe', reason: 'same_domain_skip' };
     }
     
     // Don't do immediate health check - let the actual request handle timing
     console.log(`[DEVScan Background] ✅ Proceeding with analysis for: ${url}`);
 
-    // Get server URL and session ID from storage
-    const { serverUrl, currentSessionId } = await chrome.storage.sync.get(["serverUrl", "currentSessionId"]);
-    const baseUrl = serverUrl || "http://localhost:3001";
+    // Use connection manager to ensure server availability
+    let baseUrl;
+    try {
+      baseUrl = await connectionManager.ensureConnection();
+      console.log(`[DEVScan Background] 🔗 Using server: ${baseUrl}`);
+    } catch (error) {
+      console.error(`[DEVScan Background] ❌ Server connection failed: ${error.message}`);
+      // Send connection failure verdict
+      await sendVerdictWithAck(tabId, url, "scan_failed");
+      throw error;
+    }
+
+    // Get session ID from storage (server URL is now managed by connection manager)
+    const { currentSessionId } = await chrome.storage.sync.get(["currentSessionId"]);
 
     // Use provided session ID or fallback to stored one
     const sessionId = providedSessionId || currentSessionId;
@@ -437,84 +1013,41 @@ async function handleSingleLinkAnalysis(url, domain, providedSessionId, tabId) {
       let verdictString = 'scan_failed'; // Default value
 
       if (!verdict) {
-        // If exact match fails, try to find by partial match or URL variations
-        for (const [responseUrl, responseVerdict] of Object.entries(result.verdicts)) {
-          // Simple string equality
-          if (url === responseUrl) {
-            verdict = responseVerdict;
-            break;
-          }
-
-          // Try normalized comparison (remove trailing slashes, etc.)
-          const normalizeUrl = (u) => u.replace(/\/+$/, '').toLowerCase();
-          if (normalizeUrl(url) === normalizeUrl(responseUrl)) {
-            verdict = responseVerdict;
-            break;
-          }
-
-          // Try decoding both URLs in case of encoding differences
-          try {
-            const decodedRequestUrl = decodeURIComponent(url);
-            const decodedResponseUrl = decodeURIComponent(responseUrl);
-
-            if (decodedRequestUrl === decodedResponseUrl) {
-              verdict = responseVerdict;
-              break;
-            }
-
-            // Also try without query parameters
-            const requestUrlBase = decodedRequestUrl.split('?')[0];
-            const responseUrlBase = decodedResponseUrl.split('?')[0];
-
-            if (requestUrlBase === responseUrlBase) {
-              verdict = responseVerdict;
-              break;
-            }
-          } catch (e) {
-            // Silent error handling for URL decoding
-          }
-        }
+        // Enhanced URL matching with multiple strategies
+        verdict = findVerdictForUrl(url, result.verdicts);
       }
 
       if (verdict) {
         // Convert ML verdict object to extension string format
         verdictString = convertMLVerdictToString(verdict);
         
-        console.log(`[DEVScan Background] 📤 Sending verdict to tab ${tabId}: ${url} -> ${verdictString}`);
+        console.log(`[DEVScan Background] 🎯 Verdict found for ${url}: ${verdictString}`);
         console.log(`[DEVScan Background] 🔧 DEBUG: Original verdict object:`, verdict);
-        console.log(`[DEVScan Background] 🔧 DEBUG: Converted to string:`, verdictString);
+        console.log(`[DEVScan Background] 🔧 DEBUG: Conversion result: "${verdict.final_verdict}" -> "${verdictString}"`);
         
-        // Store additional verdict data for tooltips
-        chrome.tabs.sendMessage(tabId, {
-          action: "updateSingleLinkVerdict",
-          url: url,
-          verdict: verdictString,
-          verdictData: verdict // Include full verdict object for tooltip display
-        }, (response) => {
-          if (chrome.runtime.lastError) {
-            console.error(`[DEVScan Background] Failed to send message to tab ${tabId}:`, chrome.runtime.lastError);
-            // Retry once after a short delay
-            setTimeout(() => {
-              chrome.tabs.sendMessage(tabId, {
-                action: "updateSingleLinkVerdict",
-                url: url,
-                verdict: verdictString,
-                verdictData: verdict
-              });
-            }, 1000);
-          } else {
-            console.log(`[DEVScan Background] ✅ Verdict delivered successfully for ${url}: ${verdictString}`);
-          }
-        });
+        // Cache the successful verdict
+        const ttl = verdictString === 'malicious' ? 600000 : 300000; // 10 min for malicious, 5 min for others
+        verdictCache.set(url, verdictString, sessionId, ttl);
+        
+        // Use enhanced delivery system with acknowledgment
+        try {
+          await sendVerdictWithAck(tabId, url, verdictString, verdict);
+          console.log(`[DEVScan Background] ✅ Verdict delivered successfully for ${url}: ${verdictString}`);
+        } catch (error) {
+          console.error(`[DEVScan Background] ❌ Failed to deliver verdict for ${url}:`, error);
+          // Continue with fallback - don't throw
+        }
       } else {
-        console.error(`[DEVScan Background] No verdict found for ${url} in server response`);
-
-        // Send failed verdict instead of "unknown"
-        chrome.tabs.sendMessage(tabId, {
-          action: "updateSingleLinkVerdict",
-          url: url,
-          verdict: "scan_failed"
-        });
+        console.error(`[DEVScan Background] ❌ No verdict found for ${url} in server response`);
+        
+        // Don't cache scan failures to allow retries
+        
+        // Use enhanced delivery for failed verdict too
+        try {
+          await sendVerdictWithAck(tabId, url, "scan_failed");
+        } catch (error) {
+          console.error(`[DEVScan Background] ❌ Failed to deliver scan_failed verdict for ${url}:`, error);
+        }
       }
 
       // Store session ID if provided by server
@@ -543,9 +1076,8 @@ async function handleSingleLinkAnalysis(url, domain, providedSessionId, tabId) {
 
 async function handleExtractLinks(maliciousUrl) {
   try {
-    // Get server URL from storage
-    const { serverUrl } = await chrome.storage.sync.get("serverUrl");
-    const baseUrl = serverUrl || "http://localhost:3001";
+    // Use connection manager for reliable server connection
+    const baseUrl = await connectionManager.ensureConnection();
 
     // Create timeout promise
     const timeoutPromise = new Promise((_, reject) => {
@@ -609,10 +1141,10 @@ async function interceptURL(url, details) {
   console.log("[DEVScan Intercepted] URL:", url);
 
   // Hex Decoder of the intercepted link
-  const decodedUrl = decodeHexUrl(details.url);
+  const decodedUrl = (typeof decodeHexUrl !== 'undefined') ? decodeHexUrl(details.url) : details.url;
 
   // Conditional link unshortening
-  const resolvedUrl = await resolveShortenedUrl(decodedUrl, details);
+  const resolvedUrl = (typeof resolveShortenedUrl !== 'undefined') ? await resolveShortenedUrl(decodedUrl, details) : decodedUrl;
 
   // If this URL is proceeded by user recently, skip scanning
   if (proceedURLS.has(resolvedUrl)) {
@@ -729,23 +1261,125 @@ function shouldIntercept(details) {
   try {
     const u = new URL(details.url);
 
-    // Skip yung errors HAHAHAHA
-    if (u.hostname.endsWith("google.com")) {
-      if (u.pathname.startsWith("/search")) return false; // any Google search results - for future use
-      if (u.searchParams.has("tbm") || u.searchParams.has("udm")) return false; // AI/images/news
+    // Skip search engines completely
+    const searchEngines = ["google.com", "bing.com", "yahoo.com", "duckduckgo.com", "baidu.com"];
+    if (searchEngines.some(engine => u.hostname.endsWith(engine))) {
+      return false;
     }
 
-    return true; // everything else is valid
+    // Skip direct navigation (no initiator means typed URL, bookmark, etc.)
+    if (!details.initiator || details.initiator === "null") {
+      console.log("[DEVScan] Skipping direct navigation to:", u.href);
+      return false;
+    }
+
+    // Skip navigation from search engines
+    try {
+      const initiatorUrl = new URL(details.initiator);
+      if (searchEngines.some(engine => initiatorUrl.hostname.endsWith(engine))) {
+        console.log("[DEVScan] Skipping navigation from search engine:", details.initiator);
+        return false;
+      }
+    } catch (e) {
+      // Invalid initiator URL, skip
+      return false;
+    }
+
+    // Skip internal extension pages
+    if (u.protocol === "chrome-extension:" || u.protocol === "chrome:") {
+      return false;
+    }
+
+    // Skip common safe sites
+    const safeSites = ["github.com", "stackoverflow.com", "microsoft.com", "mozilla.org"];
+    if (safeSites.some(site => u.hostname.endsWith(site))) {
+      return false;
+    }
+
+    return true; // Intercept everything else from webpage clicks
   } catch {
     return false;
   }
 }
 
-// Listen for web requests via manually input or redirect from other apps to intercept navigation to potentially malicious URLs
+// Listen for web requests to intercept navigation to potentially malicious URLs from link clicks
 chrome.webRequest.onBeforeRequest.addListener(
   (details) => {
     if (!shouldIntercept(details)) return;
+    console.log("[DEVScan] Intercepting navigation from", details.initiator, "to", details.url);
     interceptURL(details.url, details);
   },
   { urls: ["<all_urls>"], types: ["main_frame"] }
 );
+
+// ==============================
+// DEBUG COMMANDS (Available in console)
+// ==============================
+
+// Make global commands available for debugging
+self.DEVScan = {
+  diagnostics: () => diagnostics.logReport(),
+  cache: {
+    stats: () => verdictCache.getStats(),
+    clear: () => {
+      verdictCache.cache.clear();
+      verdictCache.sessionCache.clear();
+      console.log('🧹 Cache cleared');
+    }
+  },
+  connection: {
+    status: () => {
+      const info = connectionManager.getConnectionInfo();
+      console.log('🔗 Connection Status:', info);
+      return info;
+    },
+    test: async () => {
+      console.log('🧪 Testing server connection...');
+      try {
+        const result = await connectionManager.healthCheck();
+        console.log('🧪 Connection test result:', result ? '✅ Success' : '❌ Failed');
+        return result;
+      } catch (error) {
+        console.error('🧪 Connection test failed:', error.message);
+        return false;
+      }
+    },
+    find: async () => {
+      console.log('🔍 Searching for server...');
+      try {
+        const url = await connectionManager.findServer();
+        console.log('🔍 Server found:', url);
+        return url;
+      } catch (error) {
+        console.error('🔍 Server search failed:', error.message);
+        return null;
+      }
+    }
+  },
+  test: {
+    url: async (url) => {
+      console.log('🧪 Testing URL analysis:', url);
+      try {
+        const result = await handleSingleLinkAnalysis(url, 'test.com', null, 1);
+        console.log('🧪 Test result:', result);
+        return result;
+      } catch (error) {
+        console.error('🧪 Test failed:', error.message);
+        return { error: error.message };
+      }
+    }
+  }
+};
+
+console.log('🚀 DEVScan Background Script Loaded');
+console.log('💡 Debug commands (use in service worker console):');
+console.log('  - self.DEVScan.diagnostics() // Performance stats');
+console.log('  - self.DEVScan.cache.stats() // Cache statistics');  
+console.log('  - self.DEVScan.connection.status() // Connection info');
+console.log('  - self.DEVScan.connection.test() // Test server connection');
+
+// Test URL functions
+console.log('🧪 Testing URL functions:');
+const testUrl = 'https%3A//example.com/test';
+console.log('  - decodeHexUrl test:', typeof decodeHexUrl !== 'undefined' ? decodeHexUrl(testUrl) : 'Function not available');
+console.log('  - resolveShortenedUrl test:', typeof resolveShortenedUrl !== 'undefined' ? 'Function available' : 'Function not available');

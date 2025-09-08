@@ -1,6 +1,8 @@
-// utils.js
+// url-utils.js
+// URL utility functions for both service worker and content scripts
+
 // List of common shortener hostnames
-export const shortenedPatterns = [
+const shortenedPatterns = [
   'bit.ly',
   't.co',
   'tinyurl.com',
@@ -16,7 +18,7 @@ export const shortenedPatterns = [
 async function unshortenLink(shortUrl) {
   try {
     const { serverUrl } = await chrome.storage.sync.get("serverUrl");
-    const baseUrl = serverUrl || "http://localhost:3000";
+    const baseUrl = serverUrl || "http://localhost:3001";
 
     // Create timeout promise
     const timeoutPromise = new Promise((_, reject) => {
@@ -49,7 +51,7 @@ async function unshortenLink(shortUrl) {
 }
 
 // Function to detect if URL is shortened and unshorten recursively
-export async function resolveShortenedUrl(url, details = {}) {
+async function resolveShortenedUrl(url, details = {}) {
   try {
     const parsedUrl = new URL(url);
 
@@ -72,7 +74,7 @@ export async function resolveShortenedUrl(url, details = {}) {
 }
 
 // Hex decoder
-export function decodeHexUrl(url) {
+function decodeHexUrl(url) {
   try {
     const decoded = decodeURIComponent(url);
     console.log("[DEVScan] Decoded URL:", decoded);
@@ -81,4 +83,34 @@ export function decodeHexUrl(url) {
     console.warn("[DEVScan] Hex decode failed:", url, e);
     return url;
   }
+}
+
+// Export for ES6 modules (service worker)
+if (typeof module !== 'undefined' && module.exports) {
+  // Node.js/CommonJS style
+  module.exports = {
+    decodeHexUrl,
+    resolveShortenedUrl,
+    shortenedPatterns
+  };
+} else if (typeof self !== 'undefined' && self.importScripts) {
+  // Service Worker context
+  self.decodeHexUrl = decodeHexUrl;
+  self.resolveShortenedUrl = resolveShortenedUrl;
+  self.shortenedPatterns = shortenedPatterns;
+} else if (typeof window !== 'undefined') {
+  // Browser/Content Script context
+  window.decodeHexUrl = decodeHexUrl;
+  window.resolveShortenedUrl = resolveShortenedUrl;
+  window.shortenedPatterns = shortenedPatterns;
+}
+
+// Also provide as exports for ES6 import (if supported)
+try {
+  if (typeof globalThis !== 'undefined') {
+    globalThis.decodeHexUrl = decodeHexUrl;
+    globalThis.resolveShortenedUrl = resolveShortenedUrl;
+  }
+} catch (e) {
+  // Ignore if globalThis not available
 }
