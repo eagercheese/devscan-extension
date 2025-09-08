@@ -690,11 +690,11 @@ async function interceptURL(url, details) {
     }
 
     // Redirect tab directly from background
-    // chrome.tabs.update(details.tabId, {
-    //   url: chrome.runtime.getURL(
-    //     `${warningPageFile}?url=${encodeURIComponent(resolvedUrl)}&openerTabId=${details.tabId}&strict=${strictBlocking}&fromDevScan=true&ts=${Date.now()}`
-    //   )
-    // });
+    chrome.tabs.update(details.tabId, {
+      url: chrome.runtime.getURL(
+        `${warningPageFile}?url=${encodeURIComponent(resolvedUrl)}&openerTabId=${details.tabId}&strict=${strictBlocking}&fromDevScan=true&ts=${Date.now()}`
+      )
+    });
 
     const extractionResult = await handleExtractLinks(resolvedUrl);
     console.log("[DEVScan] Link extraction result:", extractionResult);
