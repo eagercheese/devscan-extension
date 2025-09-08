@@ -595,12 +595,19 @@ async function interceptURL(url, details) {
     currentSessionId = await createNewScanSession();
   }
 
-   // Redirect to scanning page immediately
-  // chrome.tabs.update(details.tabId, {
-  //   url: chrome.runtime.getURL(`html/ScanningPage.html?url=${encodeURIComponent(url)}`)
-  // });
+  //  Redirect to scanning page immediately
+  chrome.tabs.update(details.tabId, {
+    url: chrome.runtime.getURL(`html/ScanningPage.html?url=${encodeURIComponent(resolvedUrl)}`)
+  });
   
-  const { verdict } = await handleSingleLinkAnalysis(resolvedUrl, domain, currentSessionId, details.tabId);
+  let verdict = "scan_failed"; // default fallback
+  try {
+    const analysisResult = await handleSingleLinkAnalysis(resolvedUrl, domain, currentSessionId, details.tabId);
+    verdict = analysisResult?.verdict || "scan_failed";
+  } catch (err) {
+    console.error("[DEVScan] Analysis error, treating as scan_failed:", err);
+    verdict = "scan_failed";
+  }
 
   // Fix logic: redirect when verdict is malicious or anomalous
   if (verdict === "malicious" || verdict === "anomalous") {
@@ -624,16 +631,33 @@ async function interceptURL(url, details) {
     }
 
     // Redirect tab directly from background
-    chrome.tabs.update(details.tabId, {
-      url: chrome.runtime.getURL(
-        `${warningPageFile}?url=${encodeURIComponent(resolvedUrl)}&openerTabId=${details.tabId}&strict=${strictBlocking}&fromDevScan=true&ts=${Date.now()}`
-      )
-    });
+    // chrome.tabs.update(details.tabId, {
+    //   url: chrome.runtime.getURL(
+    //     `${warningPageFile}?url=${encodeURIComponent(resolvedUrl)}&openerTabId=${details.tabId}&strict=${strictBlocking}&fromDevScan=true&ts=${Date.now()}`
+    //   )
+    // });
 
     const extractionResult = await handleExtractLinks(resolvedUrl);
     console.log("[DEVScan] Link extraction result:", extractionResult);
 
-  } else {
+  } 
+
+  else if (verdict === "scan_failed") {
+      // Notify warning.js directly
+    chrome.tabs.sendMessage(details.tabId, {
+      action: "scanFailed",
+      url: resolvedUrl,
+      reason: "The analysis service did not return a valid verdict."
+    }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.error("[DEVScan] Failed to send scanFailed message:", chrome.runtime.lastError);
+      } else {
+        console.log("[DEVScan] ScanFailed message delivered to warning.js");
+      }
+    });
+  } 
+  
+  else {
     // Safe verdict → go to actual site
     chrome.tabs.update(details.tabId, { url: resolvedUrl });
     addSafeBypass(resolvedUrl); // Safe to the temporary Set

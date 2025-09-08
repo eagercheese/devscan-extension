@@ -33,6 +33,14 @@ body {
   background-color: rgba(0, 0, 0, .5);
 } 
 
+#scanning-popup {
+  display: block;
+}
+
+#scanfailed-popup {
+  display: none;
+}
+
   /* Scanning Popup Styles */
   .scanning-popup-content {
     background: white;
@@ -186,7 +194,7 @@ body {
       margin-top: 1.25rem;
       padding: 0 .25rem;
     }
-    .scanfailed-popup-close, .scanfailed-popup-proceed {
+    .scanfailed-popup-back, .scanfailed-popup-proceed {
       border: none;
       padding: .5rem 1rem;
       border-radius: .4rem;
@@ -199,11 +207,11 @@ body {
       min-width: 120px;
     }
 
-      .scanfailed-popup-close {
+      .scanfailed-popup-back {
         background: #9ca3af;
         color: white;
       }
-      .scanfailed-popup-close:hover {
+      .scanfailed-popup-back:hover {
         background: #6b7280;
       }
       .scanfailed-popup-proceed {
