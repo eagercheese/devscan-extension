@@ -63,6 +63,59 @@ function convertMLVerdictToString(verdict) {
 }
 
 // ==============================
+// SAME-DOMAIN DETECTION
+// ==============================
+
+// Check if two URLs belong to the same domain or trusted service
+function isSameDomain(url1, url2) {
+  try {
+    const domain1 = new URL(url1).hostname.toLowerCase();
+    const domain2 = new URL(url2).hostname.toLowerCase();
+    
+    // Remove www prefix for comparison
+    const normalizedDomain1 = domain1.replace(/^www\./, "");
+    const normalizedDomain2 = domain2.replace(/^www\./, "");
+    
+    // Direct domain match
+    if (normalizedDomain1 === normalizedDomain2) {
+      return true;
+    }
+    
+    // Check for trusted service domains (like Google services)
+    const trustedDomainGroups = [
+      [
+        'google.com', 'google.co.uk', 'google.ca', 'google.com.au', 'google.de', 'google.fr',
+        'accounts.google.com', 'myaccount.google.com', 'docs.google.com', 'drive.google.com', 
+        'mail.google.com', 'gmail.com', 'youtube.com', 'googlesource.com', 'gstatic.com',
+        'googleusercontent.com', 'googleapis.com', 'googleadservices.com', 'googlesyndication.com'
+      ],
+      ['microsoft.com', 'live.com', 'outlook.com', 'office.com', 'xbox.com', 'msn.com', 'bing.com'],
+      ['facebook.com', 'instagram.com', 'whatsapp.com', 'fb.com'],
+      ['amazon.com', 'aws.amazon.com', 'amazonaws.com', 'amazon.co.uk', 'amazon.ca']
+    ];
+    
+    // Check if both domains belong to the same trusted group
+    for (const group of trustedDomainGroups) {
+      const domain1InGroup = group.some(trusted => 
+        normalizedDomain1 === trusted || normalizedDomain1.endsWith('.' + trusted)
+      );
+      const domain2InGroup = group.some(trusted => 
+        normalizedDomain2 === trusted || normalizedDomain2.endsWith('.' + trusted)
+      );
+      
+      if (domain1InGroup && domain2InGroup) {
+        return true;
+      }
+    }
+    
+    return false;
+  } catch (error) {
+    console.warn(`[DEVScan Background] Error parsing URLs for same-domain check: ${error.message}`);
+    return false;
+  }
+}
+
+// ==============================
 // EXTENSION LIFECYCLE EVENTS
 // ==============================
 
@@ -323,6 +376,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 async function handleSingleLinkAnalysis(url, domain, providedSessionId, tabId) {
   try {
     console.log(`[DEVScan Background] 🔍 Starting analysis for: ${url}`);
+    
+    // SAME-DOMAIN FILTERING: Skip analysis for same-domain links
+    if (isSameDomain(url, `https://${domain}`)) {
+      console.log(`[DEVScan Background] ⏭️  Skipping same-domain link: ${url} (matches ${domain})`);
+      return { verdict: 'safe', reason: 'same_domain_skip' };
+    }
     
     // Don't do immediate health check - let the actual request handle timing
     console.log(`[DEVScan Background] ✅ Proceeding with analysis for: ${url}`);
