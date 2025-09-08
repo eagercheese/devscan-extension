@@ -22,7 +22,7 @@ body {
 }
 
 
-main{
+.popups{
   height: 100vh;
   width: 100vw;
 
@@ -31,7 +31,9 @@ main{
   align-items: center;
 
   background-color: rgba(0, 0, 0, .5);
-}
+} 
+
+  /* Scanning Popup Styles */
   .scanning-popup-content {
     background: white;
     padding: 1rem;
@@ -53,7 +55,7 @@ main{
 
     .scanning-popup-header h3 {
       margin: 0;
-      color: #C42927;
+      color: #2563eb;
       font-size: 20px;
       font-weight: 700;
     }
@@ -62,7 +64,7 @@ main{
       width: 1.75rem;
       height: 1.75rem;
       border: 3px solid #f3f3f3;
-      border-top: 3px solid #C42927;
+      border-top: 3px solid #2563eb;
       border-radius: 50%;
       animation: scanningSpinner 1s linear infinite;
     }
@@ -71,9 +73,53 @@ main{
       margin: 15px 0;
       color: #333;
       line-height: 1.5;
-      font-size: 16px;
+      font-size: .75rem;
+    }
+
+    .scanning-popup-content strong {
+      margin: 15px 0;
+      color: #333;
+      line-height: 1.5;
+      font-size: .75rem;
     }
     
+    .scanning-popup-buttons {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 1.25rem;
+      padding: 0 .25rem;
+    }
+    .scanning-popup-back, .scanning-popup-proceed {
+      border: none;
+      padding: .5rem 1rem;
+      border-radius: .4rem;
+      font-size: .75rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      flex: 1;
+      max-width: 140px;
+      min-width: 120px;
+    }
+
+      .scanning-popup-back {
+      background: #2563eb;
+      color: white;
+      border: 2px solid #2563eb;
+
+      }
+      .scanning-popup-back:hover {
+        background: #1d4ed8;
+      }
+      .scanning-popup-proceed {
+        background: #f1f5f9;
+        color: #475569;
+        border: 2px solid #cbd5e1;
+      }
+      .scanning-popup-proceed:hover {
+        background: #e2e8f0;
+        border-color: #94a3b8;
+      }
 
     @keyframes scanningSpinner {
       0% { transform: rotate(0deg); }
@@ -90,9 +136,83 @@ main{
       }
     }
 
+  /* Scan Failed Popup Styles */
+  .scanfailed-popup-content {
+    background: white;
+    padding: 1rem;
+    border-radius: .75rem;
+    width: clamp(450px, 50vw, 450px);
+    box-shadow: 0 .75rem 2rem rgba(0, 0, 0, 0.3);
+    text-align: center;
+  }
+
+    .scanfailed-popup-header {
+      display: flex;
+      align-items: end;
+      justify-content: center;
+      margin-bottom: 1.25rem;
+      gap: .5rem;
+    }
+
+    .scanfailed-popup-header h3 {
+      margin: 0;
+      color: #6b7280;
+      font-size: 20px;
+      font-weight: 700;
+
+    }
+    .scanfailed-icon {
+      font-size: 1.5rem;
+      text-align: center;
+    }
+    .scanfailed-popup-content p {
+      margin: 15px 0;
+      color: #333;
+      line-height: 1.5;
+      font-size: .75rem;
+    }
+
+    .scanfailed-popup-content strong {
+      margin: 15px 0;
+      color: #333;
+      line-height: 1.5;
+      font-size: .75rem;
+    }
 
 
+    .scanfailed-popup-buttons {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 1.25rem;
+      padding: 0 .25rem;
+    }
+    .scanfailed-popup-close, .scanfailed-popup-proceed {
+      border: none;
+      padding: .5rem 1rem;
+      border-radius: .4rem;
+      font-size: .75rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      flex: 1;
+      max-width: 140px;
+      min-width: 120px;
+    }
 
+      .scanfailed-popup-close {
+        background: #9ca3af;
+        color: white;
+      }
+      .scanfailed-popup-close:hover {
+        background: #6b7280;
+      }
+      .scanfailed-popup-proceed {
+        background: #4b5563;
+        color: white;
+      }
+      .scanfailed-popup-proceed:hover {
+        background: #374151;
+      }
 
 
 

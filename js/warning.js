@@ -80,12 +80,12 @@ if (legacyBackBtn) {
 
 // Scanning page logic
 // Only run if this is the scanning page (check for unique class)
-const isScanningPage = !!document.querySelector(".scanning-popup-content");
+const isScanningPage = !!document.querySelector(".popups");
 if (isScanningPage) {
   // Show scanning page after 2s
   setTimeout(() => {
     document.body.style.display = "block";
-  }, 2000);
+  }, 10);
 
   //listen for messages to show progress/UI
   chrome.runtime.onMessage.addListener((msg) => {

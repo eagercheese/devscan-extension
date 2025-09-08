@@ -10,16 +10,37 @@
   
 </head>
   <body>
-    <main>
+
+    <div id="scanning-popup" class="popups hidden">
       <div class="scanning-popup-content">
         <div class="scanning-popup-header">
           <div class="scanning-spinner"></div>
           <h3>Security Scan in Progress</h3>
         </div>
-        <p>DEVScan is currently analyzing this link for your safety. Please wait for the scan to complete before clicking the link.</p>
-        <!-- <p>This helps protect you from potential security threats!</p> -->
+          <p>DEVScan is currently analyzing this link for your safety. Please wait for the scan to complete before clicking the link.</p>
+          <p><strong>This helps protect you from potential security threats!</strong></p>
+      
+        <div class="scanning-popup-buttons">
+          <button class="scanning-popup-back">Go Back</button>
+          <button class="scanning-popup-proceed">Proceed with Caution</button>
+        </div>
       </div>
-    </main>
+    </div>
+
+    <!-- <div id="scanfailed-popup" class="popups hidden">
+      <div class="scanfailed-popup-content">
+        <div class="scanfailed-popup-header">
+          <div class="scanfailed-icon">⚠️</div>
+          <h3>Security Scan Failed</h3>
+        </div>
+          <p>DEVScan was unable to analyze this link for security threats. This could be due to network issues or server unavailability.</p>
+          <p><strong>We recommend exercising caution when proceeding to unknown links.</strong></p>
+        <div class="scanfailed-popup-buttons">
+          <button class="scanfailed-popup-close">Cancel</button>
+          <button class="scanfailed-popup-proceed">Proceed with Caution</button>
+        </div>
+      </div>
+    </div> -->
 
     <script src="../js/warning.js"></script>
   </body>
