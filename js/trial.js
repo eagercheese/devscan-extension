@@ -115,7 +115,11 @@ if (isScanningPage) {
     scanningPopupBackBtn.addEventListener("click", () => {
       console.log("[DEVScan] User clicked Go Back");
 
-      window.location.href = "https://www.google.com"; // No history → go to safe fallback
+      if (window.history.length > 1) {
+        window.history.back(); // There is history → go back
+      } else {
+        window.location.href = "https://www.google.com"; // No history → go to safe fallback
+      }
     });
   }
 
@@ -152,9 +156,11 @@ if (isScanningPage) {
         scanfailPopupBackBtn.addEventListener("click", () => {
           console.log("[DEVScan] User clicked Go Back");
 
-          
-          window.location.href = "https://www.google.com"; // No history → go to safe fallback
-          
+          if (window.history.length > 1) {
+            window.history.back(); // There is history → go back
+          } else {
+            window.location.href = "https://www.google.com"; // No history → go to safe fallback
+          }
         });
       }
 
