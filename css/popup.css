@@ -1,112 +1,169 @@
+/* Clean blue-themed popup design */
 body {
-  font-family: "Segoe UI", sans-serif;
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   margin: 0;
-  padding: 20px;
-  background: linear-gradient(to bottom, #79b4e3, #0f3057);
+  padding: 0;
+  background: linear-gradient(135deg, #3b82f6, #1e40af);
   color: #fff;
-  width: 300px;
+  width: 320px;
+  min-height: 420px;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
 }
 
-/* Generic card (kept if you want to reuse later) */
-.card {
-  background: #ffffff;
-  color: #222;
-  border-radius: 12px;
-  padding: 15px;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-  text-align: center;
-  margin-bottom: 15px;
-}
-
-/* Dedicated header card (avoids double padding from nested .card) */
+/* Header section with logo */
 .header-card {
-  background: #ffffff;
-  color: #222;
-  border-radius: 12px;
-  padding: 14px 16px;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.22);
-  margin-bottom: 14px;
-}
-
-/* Logo row */
-.logo-row {
+  background: rgba(255, 255, 255, 0.95);
+  color: #1f2937;
+  border-radius: 16px;
+  padding: 20px;
+  margin: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(10px);
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
-/* Crisp icon sizing/alignment */
 .logo-img {
   max-width: 100%;
-  max-height: 50px; /* Adjust height to fit nicely in the box */
-  height: auto; /* Keep aspect ratio */
+  max-height: 45px;
+  height: auto;
   object-fit: contain;
 }
 
-/* Old h1 not used but safe to keep */
-h1 {
-  font-size: 20px;
-  margin: 0;
-}
-
-/* Toggles */
+/* Toggle controls */
 .toggle-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #f0f0f0;
-  border-radius: 8px;
-  padding: 10px;
-  margin: 8px 0;
-  color: #222;
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  padding: 16px;
+  margin: 6px 16px;
+  transition: all 0.2s ease;
+  font-size: 15px;
+  font-weight: 500;
+  color: #fff;
 }
 
-/* Footer + quote */
-.footer {
-  text-align: center;
-  font-size: 11px;
-  margin-top: 12px;
+.toggle-row:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
 }
 
+.toggle-row span {
+  flex: 1;
+  line-height: 1.4;
+}
+
+/* Quote section */
 .quote {
-  background: #ffffff;
-  border-radius: 8px;
-  color: #333;
-  font-size: 12px;
-  padding: 10px;
-  margin-top: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-left: 4px solid rgba(255, 255, 255, 0.6);
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 13px;
+  font-style: italic;
+  padding: 16px;
+  margin: 16px;
+  line-height: 1.5;
+  text-align: center;
 }
 
-/* Switches */
+.quote strong {
+  color: rgba(255, 255, 255, 0.9);
+  font-style: normal;
+  font-weight: 600;
+}
+
+/* Footer section */
+.footer {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+  padding: 16px;
+  text-align: center;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.8);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: auto;
+  flex-shrink: 0;
+}
+
+.footer a {
+  color: #fff;
+  text-decoration: none;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.footer a:hover {
+  color: #dbeafe;
+  text-decoration: underline;
+}
+
+/* Modern toggle switches with blue accent */
 input[type="checkbox"] {
-  width: 40px;
-  height: 20px;
+  width: 48px;
+  height: 26px;
   appearance: none;
-  background: #999;
-  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 26px;
   position: relative;
   outline: none;
   cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+}
+
+input[type="checkbox"]:hover {
+  border-color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.1);
 }
 
 input[type="checkbox"]:checked {
-  background: #3b82f6;
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(255, 255, 255, 0.9);
+}
+
+input[type="checkbox"]:checked:hover {
+  background: #fff;
+  border-color: #fff;
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.2);
+}
+
+input[type="checkbox"]:focus-visible {
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.3);
 }
 
 input[type="checkbox"]::before {
   content: "";
   position: absolute;
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
   background: #fff;
   border-radius: 50%;
-  top: 2px;
-  left: 2px;
-  transition: 0.25s;
+  top: 1px;
+  left: 1px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 input[type="checkbox"]:checked::before {
-  transform: translateX(20px);
+  transform: translateX(22px);
+  background: #3b82f6;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
 }
 
