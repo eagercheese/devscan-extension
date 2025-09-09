@@ -92,6 +92,7 @@ if (isScanningPage) {
   // Grab intercepted URL from query param
   const params = new URLSearchParams(window.location.search);
   const interceptedUrl = params.get("url");
+  const initiator = params.get("initiator");
 
   const scanningPopupProceedBtn = document.querySelector(".scanning-popup-proceed");
   const scanningPopupBackBtn = document.querySelector(".scanning-popup-back");
@@ -115,7 +116,11 @@ if (isScanningPage) {
     scanningPopupBackBtn.addEventListener("click", () => {
       console.log("[DEVScan] User clicked Go Back");
 
-      window.location.href = "https://www.google.com"; // No history → go to safe fallback
+      if (initiator && initiator !== "none" && initiator !== "null") {
+        window.location.href = initiator; // go back to initiator
+      } else {
+        window.location.href = "https://www.google.com"; // fallback
+      }
     });
   }
 
@@ -152,8 +157,11 @@ if (isScanningPage) {
         scanfailPopupBackBtn.addEventListener("click", () => {
           console.log("[DEVScan] User clicked Go Back");
 
-          
-          window.location.href = "https://www.google.com"; // No history → go to safe fallback
+          if (initiator && initiator !== "none" && initiator !== "null") {
+            window.location.href = initiator; // go back to initiator
+          } else {
+            window.location.href = "https://www.google.com"; // fallback
+          }
           
         });
       }

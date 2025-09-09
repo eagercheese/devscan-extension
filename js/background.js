@@ -1185,11 +1185,20 @@ async function interceptURL(url, details) {
     console.log("[DEVScan] No session — creating one...");
     currentSessionId = await createNewScanSession();
   }
+  
+  // Determine initiator 
+  let initiatorValue = "none"; // default
+  if (details.initiator && details.initiator !== "null") {
+    initiatorValue = details.initiator;
+  }
 
   //  Redirect to scanning page immediately
-  // chrome.tabs.update(details.tabId, {
-  //   url: chrome.runtime.getURL(`html/ScanningPage.html?url=${encodeURIComponent(resolvedUrl)}`)
-  // });
+  // Pass both the resolved URL and initiator to the scanning page
+  chrome.tabs.update(details.tabId, {
+    url: chrome.runtime.getURL(
+      `html/ScanningPage.html?url=${encodeURIComponent(resolvedUrl)}&initiator=${encodeURIComponent(initiatorValue)}`
+    )
+  });
   
   let verdict = "scan_failed"; // default fallback
   try {
