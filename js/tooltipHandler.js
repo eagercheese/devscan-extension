@@ -257,15 +257,15 @@ const iconUrls = {
       : `background-image:url('${iconUrls[level]}')`;
 
     // Get extra fields from currentLink.dataset if available
-    let confidence = '';
-    let anomalyRisk = '';
-    let explanation = '';
-    let tip = '';
+    let confidence = "";
+    let anomalyRisk = "";
+    let explanation = "";
+    let tip = "";
     if (currentLink) {
-      confidence = currentLink.dataset.confidence || '';
-      anomalyRisk = currentLink.dataset.anomalyRisk || '';
-      explanation = currentLink.dataset.explanation || '';
-      tip = currentLink.dataset.tip || '';
+      confidence = currentLink.dataset.confidence || "";
+      anomalyRisk = currentLink.dataset.anomalyRisk || "";
+      explanation = currentLink.dataset.explanation || "";
+      tip = currentLink.dataset.tip || "";
     }
 
     tooltip.innerHTML = `
@@ -284,9 +284,13 @@ const iconUrls = {
         </div>
 
         <div class="tooltip-body" style="${bodyBg}">
-          <div class="tooltip-title" style="color:${s.titleColor};">${s.mainTitle}</div>
+          <div class="tooltip-title" style="color:${s.titleColor};">${
+      s.mainTitle
+    }</div>
           <div class="tooltip-description">${s.description}</div>
-          <div class="tooltip-link"><strong style="color:${s.titleColor};">${href}</strong></div>
+          <div class="tooltip-link"><strong style="color:${
+            s.titleColor
+          };">${href}</strong></div>
           <div class="tooltip-actions">
             <button class="ds-more" type="button"><span class="ds-logo" aria-hidden="true"></span> See more in DEVScan</button>
           </div>
@@ -312,16 +316,22 @@ const iconUrls = {
       e.stopPropagation();
 
       // Debug: Log all dataset values
-      console.log('[DEVScan Tooltip] 🔧 DEBUG: currentLink element:', currentLink);
-      console.log('[DEVScan Tooltip] 🔧 DEBUG: Link dataset keys:', currentLink ? Object.keys(currentLink.dataset) : 'no currentLink');
-      console.log('[DEVScan Tooltip] 🔧 DEBUG: Link dataset values:', {
+      console.log(
+        "[DEVScan Tooltip] 🔧 DEBUG: currentLink element:",
+        currentLink
+      );
+      console.log(
+        "[DEVScan Tooltip] 🔧 DEBUG: Link dataset keys:",
+        currentLink ? Object.keys(currentLink.dataset) : "no currentLink"
+      );
+      console.log("[DEVScan Tooltip] 🔧 DEBUG: Link dataset values:", {
         finalVerdict: currentLink?.dataset.finalVerdict,
         confidence: currentLink?.dataset.confidence,
         anomalyRisk: currentLink?.dataset.anomalyRisk,
         explanation: currentLink?.dataset.explanation,
         tip: currentLink?.dataset.tip,
         devscanRisk: currentLink?.dataset.devscanRisk,
-        allDataset: currentLink?.dataset
+        allDataset: currentLink?.dataset,
       });
 
       const details = {
@@ -329,8 +339,10 @@ const iconUrls = {
         href,
         // ML verdict data from dataset
         final_verdict: (currentLink && currentLink.dataset.finalVerdict) || "—",
-        confidence_score: (currentLink && currentLink.dataset.confidence) || "—",
-        anomaly_risk_level: (currentLink && currentLink.dataset.anomalyRisk) || "—",
+        confidence_score:
+          (currentLink && currentLink.dataset.confidence) || "—",
+        anomaly_risk_level:
+          (currentLink && currentLink.dataset.anomalyRisk) || "—",
         explanation: (currentLink && currentLink.dataset.explanation) || "",
         tip: (currentLink && currentLink.dataset.tip) || "",
         // Legacy compatibility fields
@@ -345,7 +357,10 @@ const iconUrls = {
         subtext: s.subtext,
       };
 
-      console.log('[DEVScan Tooltip] 🔧 DEBUG: Sending details to sidebar:', details);
+      console.log(
+        "[DEVScan Tooltip] 🔧 DEBUG: Sending details to sidebar:",
+        details
+      );
 
       try {
         if (
@@ -745,10 +760,11 @@ const iconUrls = {
 
   // Function to update tooltip level without recreating event listeners
   window.updateTooltipLevel = function (link, newLevel) {
-    if (!link || link.dataset.tooltipBound !== "true") return;
+    if (!link) return;
 
     link.dataset.tooltipLevel = newLevel;
 
+    // Refresh underline styling (non-blocking)
     chrome.storage.sync.get("showWarningsOnly", ({ showWarningsOnly }) => {
       const underlineEnabled = showWarningsOnly ?? true;
       const s = styles[newLevel] || styles.safe;
@@ -764,34 +780,47 @@ const iconUrls = {
       }
     });
 
-    // ---- Dynamic update ----
+    // Live update the visible tooltip (no re-hover)
     if (currentLink === link && tooltip.style.display === "block") {
       renderTooltip(newLevel, link.href || link.src || "");
+      // keep its locked position after re-render
+      requestAnimationFrame(() => {
+        try {
+          clampLockedIntoViewport(true);
+        } catch {}
+      });
+    }
 
-      // update the sidebar if it's open
-      if (
-        window.devscanSidebar &&
-        typeof window.devscanSidebar.update === "function"
-      ) {
-        const details = {
-          level: newLevel,
-          href: link.href || link.src || "",
-          // ML verdict data from dataset
-          final_verdict: link.dataset.finalVerdict || "—",
-          confidence_score: link.dataset.confidence || "—",
-          anomaly_risk_level: link.dataset.anomalyRisk || "—",
-          explanation: link.dataset.explanation || "",
-          tip: link.dataset.tip || "",
-          // Legacy compatibility fields
-          confidence: parseInt(link.dataset.confidence || "0", 10),
-          riskLabel: link.dataset.anomalyRisk || "—",
-          verdict: link.dataset.finalVerdict || "—",
-          description: styles[newLevel]?.description,
-          title: styles[newLevel]?.mainTitle,
-          label: styles[newLevel]?.label,
-          subtext: styles[newLevel]?.subtext,
-        };
+    // Live update the right sidebar ONLY if it's open for this same link
+    if (
+      window.devscanSidebar &&
+      typeof window.devscanSidebar.update === "function" &&
+      window.devscanSidebar.isOpen &&
+      (!window.devscanSidebar.currentHref ||
+        window.devscanSidebar.currentHref === (link.href || link.src || ""))
+    ) {
+      const details = {
+        level: newLevel,
+        href: link.href || link.src || "",
+        // ML verdict data from dataset
+        final_verdict: link.dataset.finalVerdict || "—",
+        confidence_score: link.dataset.confidence || "—",
+        anomaly_risk_level: link.dataset.anomalyRisk || "—",
+        explanation: link.dataset.explanation || "",
+        tip: link.dataset.tip || "",
+        // compatibility fields used by the sidebar
+        confidence: parseInt(link.dataset.confidence || "0", 10),
+        riskLabel: link.dataset.anomalyRisk || "—",
+        verdict: link.dataset.finalVerdict || "—",
+        description: styles[newLevel]?.description,
+        title: styles[newLevel]?.mainTitle,
+        label: styles[newLevel]?.label,
+        subtext: styles[newLevel]?.subtext,
+      };
+      try {
         window.devscanSidebar.update(details);
+      } catch (e) {
+        console.warn("[DEVScan] Sidebar update failed:", e);
       }
     }
   };

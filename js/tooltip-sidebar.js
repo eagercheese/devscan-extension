@@ -325,22 +325,42 @@
     wrap.classList.add("open");
     host.style.pointerEvents = "auto";
     setTimeout(() => btnClose.focus(), 0);
+
+    // track state for live updates from tooltipHandler/content.js
+    window.devscanSidebar.isOpen = true;
+    window.devscanSidebar.currentHref = details?.href || "";
   }
 
   function update(details) {
-    paint(details || {}); // trial of the error
+    paint(details || {});
+    // keep the tracked href in sync when updates come with a new link
+    if (details && details.href) {
+      window.devscanSidebar.currentHref = details.href;
+    }
   }
 
   function close() {
     wrap.classList.remove("open");
     host.style.pointerEvents = "none";
+
+    // reset state
+    window.devscanSidebar.isOpen = false;
+    window.devscanSidebar.currentHref = "";
   }
 
+  // export with state fields
+  window.devscanSidebar = {
+    open,
+    update,
+    close,
+    isOpen: false,
+    currentHref: "",
+  };
+
+  // listeners (unchanged)
   overlay.addEventListener("click", close);
   btnClose.addEventListener("click", close);
   shadow.addEventListener("keydown", (e) => {
     if (e.key === "Escape") close();
   });
-
-  window.devscanSidebar = { open, update, close };
 })();
