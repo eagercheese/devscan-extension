@@ -1187,9 +1187,9 @@ async function interceptURL(url, details) {
   }
 
   //  Redirect to scanning page immediately
-  chrome.tabs.update(details.tabId, {
-    url: chrome.runtime.getURL(`html/ScanningPage.html?url=${encodeURIComponent(resolvedUrl)}`)
-  });
+  // chrome.tabs.update(details.tabId, {
+  //   url: chrome.runtime.getURL(`html/ScanningPage.html?url=${encodeURIComponent(resolvedUrl)}`)
+  // });
   
   let verdict = "scan_failed"; // default fallback
   try {
@@ -1261,28 +1261,29 @@ function shouldIntercept(details) {
   try {
     const u = new URL(details.url);
 
-    // Skip search engines completely
+    // === Skip search engines (full domains) ===
     const searchEngines = ["google.com", "bing.com", "yahoo.com", "duckduckgo.com", "baidu.com"];
     if (searchEngines.some(engine => u.hostname.endsWith(engine))) {
-      return false;
+
+      // --- Special handling for Google ---
+      if (u.hostname.endsWith("google.com")) {
+        if (u.pathname.startsWith("/search")) return false; // Skip Google search results
+        if (u.searchParams.has("tbm") || u.searchParams.has("udm")) return false; // Skip Google AI/images/news results
+      }
+      return false; // Skip other search engines entirely
     }
 
-    // Skip direct navigation (no initiator means typed URL, bookmark, etc.)
-    if (!details.initiator || details.initiator === "null") {
-      console.log("[DEVScan] Skipping direct navigation to:", u.href);
-      return false;
-    }
-
-    // Skip navigation from search engines
+    // Skip navigation FROM search engines
     try {
-      const initiatorUrl = new URL(details.initiator);
-      if (searchEngines.some(engine => initiatorUrl.hostname.endsWith(engine))) {
-        console.log("[DEVScan] Skipping navigation from search engine:", details.initiator);
-        return false;
+      if (details.initiator) {
+        const initiatorUrl = new URL(details.initiator);
+        if (searchEngines.some(engine => initiatorUrl.hostname.endsWith(engine))) {
+          console.log("[DEVScan] Skipping navigation from search engine:", details.initiator);
+          return false;
+        }
       }
     } catch (e) {
-      // Invalid initiator URL, skip
-      return false;
+      // invalid initiator → still scan instead of skipping
     }
 
     // Skip internal extension pages
@@ -1290,13 +1291,8 @@ function shouldIntercept(details) {
       return false;
     }
 
-    // Skip common safe sites
-    const safeSites = ["github.com", "stackoverflow.com", "microsoft.com", "mozilla.org"];
-    if (safeSites.some(site => u.hostname.endsWith(site))) {
-      return false;
-    }
+    return true;
 
-    return true; // Intercept everything else from webpage clicks
   } catch {
     return false;
   }
