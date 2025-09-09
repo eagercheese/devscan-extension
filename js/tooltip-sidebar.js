@@ -296,15 +296,20 @@
     // Handle tip display based on risk level
     let tipText = "";
     if (t === "safe") {
-      tipText = "This website appears legitimate and safe to visit. Always verify the URL matches the intended destination.";
+      tipText =
+        "This website appears legitimate and safe to visit. Always verify the URL matches the intended destination.";
     } else if (t === "anomalous") {
-      tipText = "Exercise caution when visiting this link. Verify the website authenticity before providing personal information.";
+      tipText =
+        "Exercise caution when visiting this link. Verify the website authenticity before providing personal information.";
     } else if (t === "malicious") {
-      tipText = "Do not visit this website. It has been identified as potentially harmful and may compromise your security.";
+      tipText =
+        "Do not visit this website. It has been identified as potentially harmful and may compromise your security.";
     } else if (t === "scanning") {
-      tipText = "Please wait while we analyze this link for potential security threats.";
+      tipText =
+        "Please wait while we analyze this link for potential security threats.";
     } else {
-      tipText = "We couldn't verify this link's safety. Proceed with caution and verify the website manually.";
+      tipText =
+        "We couldn't verify this link's safety. Proceed with caution and verify the website manually.";
     }
 
     if (tipText) {
