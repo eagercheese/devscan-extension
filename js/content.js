@@ -23,31 +23,58 @@ function decodeHexUrl(url) {
   }
 }
 
+async function unshortenLink(shortUrl) {
+  try {
+    const { serverUrl } = await chrome.storage.sync.get("serverUrl");
+    const baseUrl = serverUrl || "http://localhost:3001";
+
+    // Create timeout promise
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("Unshorten request timeout")), 8000);
+    });
+
+    const fetchPromise = fetch(`${baseUrl}/api/unshortened-links`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: shortUrl })
+    });
+
+    const response = await Promise.race([fetchPromise, timeoutPromise]);
+
+    if (!response.ok) {
+      console.warn(`[DEVScan] Unshortener returned status ${response.status} → using original`);
+      return shortUrl;
+    }
+
+    const data = await response.json();
+    if (data && data.success && data.url) {
+      return data.url;
+    }
+
+    return shortUrl;
+  } catch (error) {
+    console.error(`[DEVScan] Unshortener failed for ${shortUrl}:`, error);
+    return shortUrl;
+  }
+}
+
 async function resolveShortenedUrl(url, details = {}) {
   const shortenedPatterns = [
-    "bit.ly",
-    "t.co",
-    "tinyurl.com",
-    "goo.gl",
-    "is.gd",
-    "buff.ly",
-    "cutt.ly",
-    "ow.ly",
-    "rebrand.ly",
+    'bit.ly', 't.co', 'tinyurl.com', 'goo.gl', 'is.gd', 
+    'buff.ly', 'cutt.ly', 'ow.ly', 'rebrand.ly'
   ];
-
+  
   try {
     const parsedUrl = new URL(url);
 
-    if (
-      shortenedPatterns.includes(parsedUrl.hostname) &&
-      !details._unshortened
-    ) {
-      console.log(
-        "[DEVScan] Detected shortened URL, but skipping unshortening in content script:",
-        url
-      );
-      return url;
+    if (shortenedPatterns.includes(parsedUrl.hostname) && !details._unshortened) {
+      // For now, just return the original URL since unshortening requires server
+      const resolvedUrl = await unshortenLink(url);
+      console.log("[DEVScan] Resolved shortened link →", resolvedUrl);
+      details._unshortened = true;
+      
+      // Recursively resolve again in case the resolved URL is also shortened
+      return resolveShortenedUrl(resolvedUrl, details);
     }
   } catch (e) {
     console.warn("[DEVScan] URL parsing failed in unshorten step:", url, e);
