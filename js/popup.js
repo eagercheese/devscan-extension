@@ -36,9 +36,11 @@ document.addEventListener("DOMContentLoaded", () => {
           {
             action: "showToast",
             message: toggleBlock.checked
-              ? "Page blocking enabled"
-              : "Page blocking disabled",
-            type: "info",
+              ? "✅ Turning ON Page Blocking. If a website looks dangerous, you'll be stopped and asked to verify before continuing."
+              : "⚠️ Turning OFF Page Blocking. Risky websites will open right away without any extra verification. Only proceed if you fully trust the site.",
+            type: toggleBlock.checked
+              ? "info"
+              : "warning",
           },
           () => {
             if (chrome.runtime.lastError) {
@@ -63,9 +65,12 @@ document.addEventListener("DOMContentLoaded", () => {
           {
             action: "showToast",
             message: e.target.checked
-              ? "Highlighting enabled"
-              : "Highlighting disabled",
-            type: "info",
+              ? "✅ Turning ON Link Highlighting. Links will be highlighted, making them easier to spot before you click."
+              : "⚠️ Turning OFF Link Highlighting. Links will not be highlighted after scanning—be extra cautious and avoid clicking links unless you fully trust the source.",
+            type: e.target.checked
+              ? "info"
+              : "warning",
+
           },
           () => {
             if (chrome.runtime.lastError) {
@@ -80,29 +85,26 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // STRICT MALICIOUS BLOCKING
   toggleStrictBlocking.addEventListener("change", () => {
-    chrome.storage.sync.set({ strictMaliciousBlocking: toggleStrictBlocking.checked }, () => {
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        const tab = tabs[0];
-        if (!tab || !tab.id || !tab.url?.startsWith("http")) return;
+  chrome.storage.sync.set({ strictMaliciousBlocking: toggleStrictBlocking.checked }, () => {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const tab = tabs[0];
+      if (!tab || !tab.id || !tab.url?.startsWith("http")) return;
 
-        chrome.tabs.sendMessage(
-          tab.id,
-          {
-            action: "showToast",
-            message: toggleStrictBlocking.checked
-              ? "Strict malicious blocking enabled - No proceed option for dangerous links"
-              : "Standard blocking enabled - Proceed option available for all links",
-            type: "info",
-          },
-          () => {
-            if (chrome.runtime.lastError) {
-              // Optional debug log:
-              // console.warn("No receiver for toast:", chrome.runtime.lastError.message);
-            }
-          }
-        );
-      });
+      // Send toast info
+      chrome.tabs.sendMessage(
+        tab.id,
+        {
+          action: "showToast",
+           message: toggleStrictBlocking.checked
+            ? "✅ Turning ON Strict Blocking. Dangerous or suspicious links will be blocked automatically, giving you stronger protection when browsing."
+            : "⚠️ Turning OFF Strict Blocking. Dangerous or suspicious links will no longer be fully blocked. Do not click any link unless you fully trust the site",
+          type: toggleStrictBlocking.checked
+            ? "info"
+            : "warning",
+        }
+      );
     });
   });
+});
 
 });

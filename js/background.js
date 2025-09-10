@@ -1234,11 +1234,11 @@ async function interceptURL(url, details) {
   console.log("[DEVScan] Navigation initiator:", initiatorValue);
   //  Redirect to scanning page immediately
   // Pass both the resolved URL and initiator to the scanning page
-  chrome.tabs.update(details.tabId, {
-    url: chrome.runtime.getURL(
-      `html/ScanningPage.html?url=${encodeURIComponent(resolvedUrl)}&initiator=${encodeURIComponent(initiatorValue)}`
-    )
-  });
+  // chrome.tabs.update(details.tabId, {
+  //   url: chrome.runtime.getURL(
+  //     `html/ScanningPage.html?url=${encodeURIComponent(resolvedUrl)}&initiator=${encodeURIComponent(initiatorValue)}`
+  //   )
+  // });
   
   let verdict = "scan_failed"; // default fallback
   try {

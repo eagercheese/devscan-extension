@@ -1216,9 +1216,48 @@ function startDOMObserver() {
 
 // Listen for messages from background script and other extension components
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+
   if (msg.action === "showToast") {
-    showToast(msg.message, msg.type);
-  } else if (msg.action === "updateSingleLinkVerdict") {
+    // Simple toast notification in the center of the screen    
+     const oldToast = document.getElementById("devscan-toast");
+      if (oldToast) oldToast.remove();
+
+      // Create new toast
+      const notice = document.createElement("div");
+      notice.id = "devscan-toast";
+      notice.textContent = msg.message;
+
+
+    // Style it
+    notice.style.position = "fixed";
+    notice.style.top = "0%";
+    notice.style.left = "50%";
+    notice.style.transform = "translateX(-50%)";
+    notice.style.color = "#856404";
+    notice.style.padding = "8px 10px";
+    notice.style.borderRadius = "8px";
+    notice.style.fontSize = "16px";
+    notice.style.fontWeight = "500";
+    notice.style.boxShadow = "0 4px 10px rgba(0,0,0,0.25)";
+    notice.style.zIndex = "2147483647";
+    notice.style.width = "clamp(250px, 50%, 500px)";
+    notice.style.textAlign = "center";
+
+    if (msg.type === "warning") {
+      notice.style.background = "#fff3cd";
+      notice.style.border = "1px solid #ffeeba";
+    } else if (msg.type === "info") {
+      notice.style.background = "#80d480ff";
+      notice.style.border = "1px solid #80d480ff";
+    }
+
+    document.body.appendChild(notice);
+
+    // Auto remove after 5s
+    setTimeout(() => notice.remove(), 5000);
+  } 
+  
+  else if (msg.action === "updateSingleLinkVerdict") {
     // Handle individual link verdict updates for immediate feedback
     const { url, verdict, verdictData } = msg;
 
@@ -1336,6 +1375,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   } else if (msg.action === "sessionUpdated") {
     currentSessionId = msg.sessionId;
   }
+
 });
 
 // ==============================
