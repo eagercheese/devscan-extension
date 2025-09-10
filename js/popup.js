@@ -36,8 +36,8 @@ document.addEventListener("DOMContentLoaded", () => {
           {
             action: "showToast",
             message: toggleBlock.checked
-              ? "✅ Turning ON Page Blocking. If a website looks dangerous, you'll be stopped and asked to verify before continuing."
-              : "⚠️ Turning OFF Page Blocking. Risky websites will open right away without any extra verification. Only proceed if you fully trust the site.",
+              ? "<h3> Turning ON Page Blocking</h3> <p>If a website looks dangerous, you'll be stopped and asked to verify before continuing.</p>"
+              : "<h3> Turning OFF Page Blocking</h3> <p>Risky websites will open right away without any extra verification. Only proceed if you fully trust the site.</p>",
             type: toggleBlock.checked
               ? "info"
               : "warning",
@@ -65,8 +65,8 @@ document.addEventListener("DOMContentLoaded", () => {
           {
             action: "showToast",
             message: e.target.checked
-              ? "✅ Turning ON Link Highlighting. Links will be highlighted, making them easier to spot before you click."
-              : "⚠️ Turning OFF Link Highlighting. Links will not be highlighted after scanning—be extra cautious and avoid clicking links unless you fully trust the source.",
+              ? "<h3>Turning ON Link Highlighting</h3> <p>Links will be highlighted, making them easier to spot before you click.</p>"
+              : "<h3>Turning OFF Link Highlighting</h3> <p>Links will not be highlighted after scanning—be extra cautious and avoid clicking links unless you fully trust the source.</p>",
             type: e.target.checked
               ? "info"
               : "warning",
@@ -96,8 +96,8 @@ document.addEventListener("DOMContentLoaded", () => {
         {
           action: "showToast",
            message: toggleStrictBlocking.checked
-            ? "✅ Turning ON Strict Blocking. Dangerous or suspicious links will be blocked automatically, giving you stronger protection when browsing."
-            : "⚠️ Turning OFF Strict Blocking. Dangerous or suspicious links will no longer be fully blocked. Do not click any link unless you fully trust the site",
+            ? "<h3>Turning ON Strict Blocking</h3> <p>Dangerous or suspicious links will be blocked automatically, giving you stronger protection when browsing.</p>"
+            : "<h3>Turning OFF Strict Blocking</h3> <p> Dangerous or suspicious links will no longer be fully blocked. Do not click any link unless you fully trust the site.</p>",
           type: toggleStrictBlocking.checked
             ? "info"
             : "warning",

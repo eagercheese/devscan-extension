@@ -1218,44 +1218,99 @@ function startDOMObserver() {
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   if (msg.action === "showToast") {
-    // Simple toast notification in the center of the screen    
-     const oldToast = document.getElementById("devscan-toast");
-      if (oldToast) oldToast.remove();
+  // Remove old toast if still visible
+  const oldToast = document.getElementById("devscan-toast");
+  if (oldToast) oldToast.remove();
 
-      // Create new toast
-      const notice = document.createElement("div");
-      notice.id = "devscan-toast";
-      notice.textContent = msg.message;
+  // Create container
+  const toast = document.createElement("div");
+  toast.id = "devscan-toast";
 
+  // Use innerHTML so <h3> and <p> render properly
+  toast.innerHTML = `
+    <div class="devscan-toast-content ${msg.type}">
+      <div class="devscan-toast-line"></div>
+      <div class="devscan-toast-icon"> 
+        ${msg.type === "warning" ? "⚠️" : "✅"}
+      </div>
+      <div class="devscan-toast-text">
+        ${msg.message}
+      </div>
+    </div>
+  `;
 
-    // Style it
-    notice.style.position = "fixed";
-    notice.style.top = "0%";
-    notice.style.left = "50%";
-    notice.style.transform = "translateX(-50%)";
-    notice.style.color = "#856404";
-    notice.style.padding = "8px 10px";
-    notice.style.borderRadius = "8px";
-    notice.style.fontSize = "16px";
-    notice.style.fontWeight = "500";
-    notice.style.boxShadow = "0 4px 10px rgba(0,0,0,0.25)";
-    notice.style.zIndex = "2147483647";
-    notice.style.width = "clamp(250px, 50%, 500px)";
-    notice.style.textAlign = "center";
+  // Base positioning
+  toast.style.cssText = `
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2147483647;
+    font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+  `;
 
-    if (msg.type === "warning") {
-      notice.style.background = "#fff3cd";
-      notice.style.border = "1px solid #ffeeba";
-    } else if (msg.type === "info") {
-      notice.style.background = "#80d480ff";
-      notice.style.border = "1px solid #80d480ff";
+  // Add styles for content
+  const style = document.createElement("style");
+  style.textContent = `
+    .devscan-toast-content {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+    
+      padding: 8px 10px;
+      border-radius: 10px;
+      width: clamp(250px , 75vw, 500px);
+
+      background: white;
+      border: 1px solid white;
+      color: ${msg.type === "warning" ? "#856404" : "#065f46"};
+      box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+
+      text-align: left;
+      animation: devscanToastFade 0.3s ease-out;
+
+      gap: 8px;
+    }
+    .devscan-toast-line {
+      align-self: stretch;   
+      width: 6px;           
+      border-radius: 6px;  
+
+      background: ${msg.type === "warning" ? "#856404" : "#065f46"};
     }
 
-    document.body.appendChild(notice);
 
-    // Auto remove after 5s
-    setTimeout(() => notice.remove(), 5000);
-  } 
+    .devscan-toast-icon {
+      font-size: 30px;
+      margin-right: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .devscan-toast-content h3 {
+      margin: 0 0 2px 0;
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .devscan-toast-content p {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    @keyframes devscanToastFade {
+      from { opacity: 0; transform: translateY(-10px) scale(0.95); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+  `;
+
+  document.body.appendChild(style);
+  document.body.appendChild(toast);
+
+  // Auto remove after 5s
+  setTimeout(() => toast.remove(), 5000);
+}
+
   
   else if (msg.action === "updateSingleLinkVerdict") {
     // Handle individual link verdict updates for immediate feedback
