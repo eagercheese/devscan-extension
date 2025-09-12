@@ -595,11 +595,9 @@ function updateLinkTooltip(url, verdict, verdictData = null) {
 
     // If we have rich verdict data, store it for tooltips
     if (verdictData && typeof verdictData === "object") {
-      console.log(
-        "[DEVScan Content] 🔧 DEBUG: Storing rich ML data from verdictData:",
-        verdictData
-      );
-      link.dataset.finalVerdict = verdictData.final_verdict || "";
+      console.log("[DEVScan Content] 🔧 DEBUG: Storing rich ML data from verdictData:", verdictData);
+
+      link.dataset.finalVerdict = verdict || "";
       link.dataset.confidence =
         verdictData.confidence_score != null
           ? verdictData.confidence_score
@@ -1313,30 +1311,21 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   
   else if (msg.action === "updateSingleLinkVerdict") {
+    console.log("Listening from updateSingleLinkVerdict");
     // Handle individual link verdict updates for immediate feedback
     const { url, verdict, verdictData } = msg;
 
     console.log(`[DEVScan Content] 📨 Received verdict for ${url}: ${verdict}`);
     console.log(`[DEVScan Content] 🔧 DEBUG: Verdict data:`, verdictData);
-    console.log(
-      `[DEVScan Content] 🔧 DEBUG: isValidSecurityVerdict(${verdict}):`,
-      isValidSecurityVerdict(verdict)
-    );
-    console.log(
-      `[DEVScan Content] Current linkVerdicts state:`,
-      Array.from(linkVerdicts.entries())
-    );
-    console.log(
-      `[DEVScan Content] Current collectedLinks state:`,
-      Array.from(collectedLinks)
-    );
+    console.log(`[DEVScan Content] 🔧 DEBUG: isValidSecurityVerdict(${verdict}):`,isValidSecurityVerdict(verdict));
+
+    console.log(`[DEVScan Content] Current linkVerdicts state:`,Array.from(linkVerdicts.entries()));
+    console.log(`[DEVScan Content] Current collectedLinks state:`,Array.from(collectedLinks));
 
     // Validate the verdict
     if (!verdict || typeof verdict !== "string") {
-      console.error(
-        `[DEVScan Content] Invalid verdict received for ${url}:`,
-        verdict
-      );
+      console.error(`[DEVScan Content] Invalid verdict received for ${url}:`,verdict);
+
       sendResponse({ success: false, error: "Invalid verdict" });
       return true;
     }
@@ -1344,34 +1333,25 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     // Only cache legitimate security verdicts, not failed scans
     if (isValidSecurityVerdict(verdict)) {
       linkVerdicts.set(url, verdict);
-      console.log(
-        `[DEVScan Content] ✅ Successfully cached security verdict ${verdict} for ${url}`
-      );
+      console.log(`[DEVScan Content] ✅ Successfully cached security verdict ${verdict} for ${url}`);
+
     } else {
-      console.log(
-        `[DEVScan Content] ⚠️ Not caching failed scan result for ${url}: ${verdict}`
-      );
+      console.log(`[DEVScan Content] ⚠️ Not caching failed scan result for ${url}: ${verdict}`);
       // Remove from collectedLinks to allow retry
       collectedLinks.delete(url);
     }
-    console.log(
-      `[DEVScan Content] 🔧 DEBUG: linkVerdicts now contains:`,
-      Array.from(linkVerdicts.entries())
-    );
 
+    console.log(`[DEVScan Content] 🔧 DEBUG: linkVerdicts now contains:`,Array.from(linkVerdicts.entries()));
+
+    let updateSuccess = false;
     if (verdictData) {
       // Store additional verdict data for rich tooltips
       const links = document.querySelectorAll(`a[href="${url}"]`);
-      console.log(
-        `[DEVScan Content] 🔧 DEBUG: Found ${links.length} links matching href="${url}"`
-      );
+      console.log(`[DEVScan Content] 🔧 DEBUG: Found ${links.length} links matching href="${url}"`);
+
       links.forEach((link, index) => {
-        console.log(
-          `[DEVScan Content] 🔧 DEBUG: Updating link ${
-            index + 1
-          } with verdict data`
-        );
-        link.dataset.finalVerdict = verdictData.final_verdict || "";
+        console.log(`[DEVScan Content] 🔧 DEBUG: Updating link ${index + 1} with verdict data`);
+        link.dataset.finalVerdict = verdictData.final_verdict || "secret";
         link.dataset.confidence = verdictData.confidence_score || ""; // Fixed: use 'confidence' not 'confidenceScore'
         link.dataset.anomalyRisk = verdictData.anomaly_risk_level || "";
         link.dataset.explanation = verdictData.explanation || "";
@@ -1380,26 +1360,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       });
 
       // Update tooltip with converted verdict string but pass verdictData for rich tooltip info
-      console.log(
-        `[DEVScan Content] 🔧 DEBUG: Calling updateLinkTooltip with converted verdict: ${verdict} and verdictData for rich info`
-      );
-      const updateSuccess = updateLinkTooltip(url, verdict, verdictData);
-      console.log(
-        `[DEVScan Content] ${
-          updateSuccess ? "✅" : "❌"
-        } Tooltip update for ${url} with converted verdict and rich data`
-      );
+      console.log(`[DEVScan Content] 🔧 DEBUG: Calling updateLinkTooltip with converted verdict: ${verdict} and verdictData for rich info`);
+
+      updateSuccess = updateLinkTooltip(url, verdict, verdictData);
+      console.log(`[DEVScan Content] ${updateSuccess ? "✅" : "❌"} Tooltip update for ${url} with converted verdict and rich data ||  verdict: ${verdict}`);
     } else {
       // Fallback to string verdict if no rich data
-      console.log(
-        `[DEVScan Content] 🔧 DEBUG: Calling updateLinkTooltip with string verdict: ${verdict}`
-      );
-      const updateSuccess = updateLinkTooltip(url, verdict);
-      console.log(
-        `[DEVScan Content] ${
-          updateSuccess ? "✅" : "❌"
-        } Tooltip update for ${url}: ${verdict}`
-      );
+      console.log(`[DEVScan Content] 🔧 DEBUG: Calling updateLinkTooltip with string verdict: ${verdict}`);
+
+      updateSuccess = updateLinkTooltip(url, verdict);
+      console.log(`[DEVScan Content] ${updateSuccess ? "✅" : "❌"} Tooltip update for ${url} with string verdict: ${verdict}`);
     }
 
     console.log(`[DEVScan Content] Stored verdict ${verdict} for ${url}`);

@@ -320,10 +320,12 @@ class VerdictCache {
     this.sessionCache = new Map(); // Per-session cache
     this.cleanupInterval = setInterval(() => this.cleanup(), 60000); // Cleanup every minute
   }
-  
-  set(url, verdict, sessionId = null, ttl = 300000) { // 5 min default TTL
+
+  set(url, verdict, anomaly_risk_level, confidence_score, sessionId = null, ttl = 300000) { // 5 min default TTL
     const entry = {
       verdict,
+      anomaly_risk_level,
+      confidence_score,
       timestamp: Date.now(),
       ttl,
       sessionId
@@ -338,7 +340,7 @@ class VerdictCache {
       this.sessionCache.get(sessionId).set(url, entry);
     }
     
-    console.log(`[DEVScan Background] 💾 Cached verdict for ${url}: ${verdict}`);
+    console.log(`[DEVScan Background] 💾 Cached verdict for ${url}: verdict: ${verdict} | anomaly_risk_level: ${anomaly_risk_level} | confidence_score: ${confidence_score}` );
   }
   
   get(url, sessionId = null) {
@@ -346,16 +348,24 @@ class VerdictCache {
     if (sessionId && this.sessionCache.has(sessionId)) {
       const sessionEntry = this.sessionCache.get(sessionId).get(url);
       if (sessionEntry && this.isValid(sessionEntry)) {
-        console.log(`[DEVScan Background] 🎯 Cache HIT (session) for ${url}: ${sessionEntry.verdict}`);
-        return sessionEntry.verdict;
+        console.log(`[DEVScan Background] 🎯 Cache HIT (session) for ${url}: verdict: ${sessionEntry.verdict} | anomaly_risk_level: ${sessionEntry.anomaly_risk_level} | confidence_score: ${sessionEntry.confidence_score}`);
+        return {
+          verdict: sessionEntry.verdict,
+          anomaly_risk_level: sessionEntry.anomaly_risk_level,
+          confidence_score: sessionEntry.confidence_score
+        };
       }
     }
     
     // Fallback to global cache
     const entry = this.cache.get(url);
     if (entry && this.isValid(entry)) {
-      console.log(`[DEVScan Background] 🎯 Cache HIT (global) for ${url}: ${entry.verdict}`);
-      return entry.verdict;
+      console.log(`[DEVScan Background] 🎯 Cache HIT (global) for ${url}: verdict: ${entry.verdict} | anomaly_risk_level: ${entry.anomaly_risk_level} | confidence_score: ${entry.confidence_score}`);
+      return {
+        verdict: entry.verdict,
+        anomaly_risk_level: entry.anomaly_risk_level,
+        confidence_score: entry.confidence_score
+      };
     }
     
     console.log(`[DEVScan Background] 🎯 Cache MISS for ${url}`);
@@ -577,19 +587,25 @@ function sendVerdictWithAck(tabId, url, verdict, verdictData = null, retryCount 
         logger.success();
         resolve(response);
       } else {
-        const error = new Error(`Message not acknowledged: ${JSON.stringify(response)}`);
-        console.warn(`[DEVScan Background] ⚠️ Message not acknowledged for ${url}:`, response);
-        
-        if (retryCount < maxRetries) {
-          setTimeout(() => {
-            sendVerdictWithAck(tabId, url, verdict, verdictData, retryCount + 1)
-              .then(resolve).catch(reject);
-          }, 1000 * (retryCount + 1));
-        } else {
-          logger.failure(error);
-          reject(error);
+          if (response && response.message === "Failed to update tooltip") {
+            console.log(`[DEVScan Background] ℹ️ No link in DOM for ${url}, skipping tooltip update.`);
+            logger.success(); // treat as a "handled" case, not failure
+            resolve(response);
+          } else {
+            const error = new Error(`Message not acknowledged: ${JSON.stringify(response)}`);
+            console.warn(`[DEVScan Background] ⚠️ Message not acknowledged for ${url}:`, response);
+            
+            if (retryCount < maxRetries) {
+              setTimeout(() => {
+                sendVerdictWithAck(tabId, url, verdict, verdictData, retryCount + 1)
+                  .then(resolve).catch(reject);
+              }, 1000 * (retryCount + 1));
+            } else {
+              logger.failure(error);
+              reject(error);
+            }
+          }
         }
-      }
     });
   });
 }
@@ -970,23 +986,28 @@ async function handleSingleLinkAnalysis(url, domain, providedSessionId, tabId) {
     // Check cache first to avoid unnecessary server requests
     const cachedVerdict = verdictCache.get(url, providedSessionId);
     if (cachedVerdict) {
-      console.log(`[DEVScan Background] 🎯 Using cached verdict for ${url}: ${cachedVerdict}`);
+      console.log(`[DEVScan Background] 🎯 Using cached verdict for ${url}: ${JSON.stringify(cachedVerdict)}`);
+      let verdictAnomalyLevel = cachedVerdict.anomaly_risk_level || 'N/A';
+      let verdictConfidence = cachedVerdict.confidence_score || 'N/A';
+
       diagnostics.logCacheEvent(true); // Cache hit
-      await sendVerdictWithAck(tabId, url, cachedVerdict);
-      return { verdict: cachedVerdict, reason: 'cached' };
+
+      await sendVerdictWithAck(tabId, url, cachedVerdict.verdict, cachedVerdict);
+      return {  verdict: cachedVerdict.verdict , reason: 'cached' };
+
     } else {
       diagnostics.logCacheEvent(false); // Cache miss
     }
     
     // SAME-DOMAIN FILTERING: Skip analysis for same-domain links
-    if (isSameDomain(url, `https://${domain}`)) {
-      console.log(`[DEVScan Background] ⏭️  Skipping same-domain link: ${url} (matches ${domain})`);
+    // if (isSameDomain(url, `https://${domain}`)) {
+    //   console.log(`[DEVScan Background] ⏭️  Skipping same-domain link: ${url} (matches ${domain})`);
       
-      // Cache the same-domain result
-      verdictCache.set(url, 'safe', providedSessionId, 600000); // 10 minute TTL for same-domain
-      await sendVerdictWithAck(tabId, url, 'safe');
-      return { verdict: 'safe', reason: 'same_domain_skip' };
-    }
+    //   // Cache the same-domain result
+    //   // verdictCache.set(url, 'safe', providedSessionId, 600000); // 10 minute TTL for same-domain
+    //   // await sendVerdictWithAck(tabId, url, 'safe');
+    //   return { verdict: 'safe', reason: 'same_domain_skip' };
+    // }
     
     // Don't do immediate health check - let the actual request handle timing
     console.log(`[DEVScan Background] ✅ Proceeding with analysis for: ${url}`);
@@ -1060,15 +1081,21 @@ async function handleSingleLinkAnalysis(url, domain, providedSessionId, tabId) {
       if (verdict) {
         // Convert ML verdict object to extension string format
         verdictString = convertMLVerdictToString(verdict);
+        verdictAnomalyLevel = verdict.anomaly_risk_level || 'N/A';
+        verdictConfidence = verdict.confidence_score || 'N/A';
         
+        // Log detailed verdict info for debugging
         console.log(`[DEVScan Background] 🎯 Verdict found for ${url}: ${verdictString}`);
         console.log(`[DEVScan Background] 🔧 DEBUG: Original verdict object:`, verdict);
         console.log(`[DEVScan Background] 🔧 DEBUG: Conversion result: "${verdict.final_verdict}" -> "${verdictString}"`);
+        console.log(`[DEVScan Background] 🎯 Anomaly_risk_level result: "${verdict.anomaly_risk_level}"`);
+        console.log(`[DEVScan Background] 🎯 Confidence_score result: "${verdict.confidence_score}"`);
+
         
         // Cache the successful verdict
         const ttl = verdictString === 'malicious' ? 600000 : 300000; // 10 min for malicious, 5 min for others
-        verdictCache.set(url, verdictString, sessionId, ttl);
-        
+        verdictCache.set(url, verdictString, verdictAnomalyLevel, verdictConfidence, sessionId, ttl);
+
         // Use enhanced delivery system with acknowledgment
         try {
           await sendVerdictWithAck(tabId, url, verdictString, verdict);
