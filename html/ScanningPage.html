@@ -1,47 +1,135 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <link rel="stylesheet" href="../css/ScanningPage.css">
-  <link rel="icon" href="../css/picture/scanning_background.png">
-  <title>DEVScan Scanning</title>
-  
-</head>
+    <!-- Font to match AnomalousWarningPage -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="../css/ScanningPage.css" />
+    <link rel="icon" href="../css/picture/scanning_background.png" />
+    <title>DEVScan • Scanning</title>
+  </head>
   <body>
-  <div class="popups hidden">
-    <div id="scanning-popup">
-      <div class="scanning-popup-content">
-        <div class="scanning-popup-header">
-          <div class="scanning-spinner"></div>
-          <h3>Security Scan in Progress</h3>
+    <!-- Subtle background accents like the warning page -->
+    <div class="bg"></div>
+    <div class="bg-accent"></div>
+
+    <!-- Top bar (same height/feel as warning page). 
+       Remove the <span> if your logo already includes text. -->
+    <header class="topbar" aria-label="DEVScan">
+      <div class="brand">
+        <img
+          src="../css/picture/DEVscan Logo.png"
+          alt="DEVScan"
+          class="brand-logo"
+        />
+      </div>
+    </header>
+
+    <!-- Modal layer -->
+    <div class="popups">
+      <!-- SCANNING -->
+      <div id="scanning-popup" class="panel" role="status" aria-live="polite">
+        <div class="panel-head">
+          <div class="icon-circle" aria-hidden="true">
+            <!-- amber spinner icon -->
+            <svg class="spinner" viewBox="0 0 50 50" aria-hidden="true">
+              <circle
+                class="spinner-track"
+                cx="25"
+                cy="25"
+                r="20"
+                fill="none"
+                stroke-width="6"
+              ></circle>
+              <circle
+                class="spinner-ind"
+                cx="25"
+                cy="25"
+                r="20"
+                fill="none"
+                stroke-width="6"
+              ></circle>
+            </svg>
+          </div>
+          <h1 class="title">Security Scan in Progress</h1>
+          <p class="subtitle">
+            DEVScan is analyzing this link for your safety. Please wait for the
+            scan to complete before proceeding.
+          </p>
         </div>
-          <p>DEVScan is currently analyzing this link for your safety. Please wait for the scan to complete before clicking the link.</p>
-          <p><strong>This helps protect you from potential security threats!</strong></p>
-      
-        <div class="scanning-popup-buttons">
-          <button class="scanning-popup-back">Go Back</button>
-          <button class="scanning-popup-proceed">Proceed with Caution</button>
+
+        <div class="status-bar" role="img" aria-label="Scanning…">
+          <div class="bar-track">
+            <div class="bar-fill"></div>
+          </div>
+          <p class="status-note">
+            This helps protect you from potential security threats.
+          </p>
+        </div>
+
+        <div class="actions">
+          <button class="safety-btn scanning-popup-back">Go Back</button>
+          <button class="proceed-btn scanning-popup-proceed">
+            Proceed with Caution
+          </button>
+        </div>
+      </div>
+
+      <!-- SCAN FAILED -->
+      <div
+        id="scanfailed-popup"
+        class="panel hidden"
+        role="alert"
+        aria-live="assertive"
+      >
+        <div class="panel-head">
+          <div class="icon-circle icon-error" aria-hidden="true">
+            <!-- shield-exclamation -->
+            <svg
+              viewBox="0 0 24 24"
+              width="28"
+              height="28"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path
+                d="M12 2l7 3v6c0 5-3.8 9.7-7 11-3.2-1.3-7-6-7-11V5l7-3zm1 6h-2v6h2V8zm0 8h-2v2h2v-2z"
+              />
+            </svg>
+          </div>
+          <h1 class="title">Security Scan Failed</h1>
+          <p class="subtitle">
+            DEVScan couldn’t analyze this link (network issues or server
+            unavailability). Proceed carefully.
+          </p>
+        </div>
+
+        <div class="reason-card">
+          <summary class="reason-summary">What you can do</summary>
+          <ul class="reason-list">
+            <li>Try again in a moment or refresh the page.</li>
+            <li>Avoid entering any personal or financial information.</li>
+            <li>Only proceed if you fully trust the destination.</li>
+          </ul>
+        </div>
+
+        <div class="actions">
+          <button class="safety-btn scanfailed-popup-back">Go Back</button>
+          <button class="proceed-btn scanfailed-popup-proceed">
+            Proceed with Caution
+          </button>
         </div>
       </div>
     </div>
 
-    <div id="scanfailed-popup" >
-      <div class="scanfailed-popup-content">
-        <div class="scanfailed-popup-header">
-          <div class="scanfailed-icon">⚠️</div>
-          <h3>Security Scan Failed</h3>
-        </div>
-          <p>DEVScan was unable to analyze this link for security threats. This could be due to network issues or server unavailability.</p>
-          <p><strong>We recommend exercising caution when proceeding to unknown links.</strong></p>
-        <div class="scanfailed-popup-buttons">
-          <button class="scanfailed-popup-back">Go Back</button>
-          <button class="scanfailed-popup-proceed">Proceed with Caution</button>
-        </div>
-      </div>
-    </div>
-  </div>
     <script src="../js/warning.js"></script>
   </body>
 </html>

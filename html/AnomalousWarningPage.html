@@ -1,39 +1,109 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="../css/AnomalousWarningPage.css">
-  <title>Suspicious Website Warning</title>
-</head>
-<body>
-  
-  <div class="background-image"></div>
-  <div class="Icon-box">
-    <img src="../css/picture/DEVscan Logo.png" alt="DEVscan Logo">
-  </div>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../css/AnomalousWarningPage.css" />
+    <title>Suspicious Website Warning • DEVScan</title>
+  </head>
+  <body>
+    <!-- Background -->
+    <div class="bg"></div>
+    <div class="bg-accent"></div>
 
-  <div class="box-main-content">
-    <p class="warning-title">CAUTION! SUSPICIOUS WEBSITE DETECTED</p>
-    <p class="description-content">DEVScan has found unusual activity on this website that doesn't match typical safe website patterns. While it may not be immediately dangerous, it requires extra caution.</p>                             
-    <p class="title-description">This suspicious website might:</p>
+    <!-- Top bar -->
+    <header class="topbar" aria-label="DEVScan">
+      <div class="brand">
+        <img
+          src="../css/picture/DEVscan Logo.png"
+          alt="DEVScan"
+          class="brand-logo"
+        />
+      </div>
+    </header>
 
-    <ul class="ul-content">                                                
-      <li>Have suspicious code or behavior patterns</li>
-      <li>Collect more personal information than necessary</li>
-      <li>Redirect you to unexpected or unverified websites</li>
-      <li>Display misleading or deceptive content</li>
-      <li>Have security vulnerabilities that could be exploited</li>
-    </ul>
+    <!-- Main panel -->
+    <main class="panel" role="alert" aria-live="assertive">
+      <div class="panel-head">
+        <div class="icon-circle" aria-hidden="true">
+          <!-- shield-exclamation icon (inline SVG, no external deps) -->
+          <svg
+            viewBox="0 0 24 24"
+            width="28"
+            height="28"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path
+              d="M12 2l7 3v6c0 5-3.8 9.7-7 11-3.2-1.3-7-6-7-11V5l7-3zm1 6h-2v6h2V8zm0 8h-2v2h2v-2z"
+            />
+          </svg>
+        </div>
+        <h1 class="title">Caution: Suspicious Website Detected</h1>
+        <p class="subtitle">
+          DEVScan identified unusual patterns that don’t match typical safe-site
+          behavior. This may not be immediately dangerous, but it requires extra
+          caution.
+        </p>
+      </div>
 
-    <p class="indicator-level">Caution Level: MEDIUM - Proceed only if you trust this website</p>
-  </div>
+      <!-- Risk indicator -->
+      <section class="risk risk--medium" aria-labelledby="risk-label">
+        <div class="risk-row">
+          <span id="risk-label" class="risk-label">Caution level</span>
+          <span class="risk-badge">Medium</span>
+        </div>
 
-  <div class="button-container">
-    <button type="button" class="safety-btn">Take Me Back (Recommended)</button>
-    <button type="button" class="proceed-btn">I Trust This Website - Continue</button>
-  </div>
+        <div class="risk-meter" role="img" aria-label="Risk meter: Medium">
+          <div class="risk-track">
+            <div class="risk-pointer"></div>
+          </div>
+          <div class="risk-scale">
+            <span>Low</span><span>Medium</span><span>High</span>
+          </div>
+        </div>
+      </section>
 
-  <script src="../js/warning.js"></script>
-</body>
+      <!-- Why flagged -->
+      <section class="reasons">
+        <details class="reason-card" open>
+          <summary class="reason-summary">Why this page is flagged</summary>
+          <ul class="reason-list">
+            <li>Suspicious code or behavior patterns</li>
+            <li>Collects more personal information than necessary</li>
+            <li>May redirect to unexpected or unverified sites</li>
+            <li>Potentially misleading or deceptive content</li>
+            <li>Possible security vulnerabilities that could be exploited</li>
+          </ul>
+        </details>
+      </section>
+
+      <!-- Actions -->
+      <div class="actions">
+        <button type="button" class="safety-btn" data-test="go-back" autofocus>
+          Take Me Back (Recommended)
+        </button>
+        <button
+          type="button"
+          class="proceed-btn"
+          data-test="continue-anyway"
+          aria-describedby="proceed-note"
+        >
+          I Trust This Website — Continue
+        </button>
+      </div>
+
+      <p id="proceed-note" class="fineprint">
+        Only continue if you trust this site and understand the risks.
+      </p>
+    </main>
+
+    <script src="../js/warning.js"></script>
+  </body>
 </html>

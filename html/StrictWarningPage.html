@@ -1,42 +1,99 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="../css/StrictWarningPage.css">
-  <title>Access Blocked</title>
-</head>
-<body>
-  
-  <div class="background-image"></div>
-  <div class="Icon-box">
-    <img src="../css/picture/DEVscan Logo.png" alt="DEVscan Logo">
-  </div>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../css/StrictWarningPage.css" />
+    <title>Access Blocked • DEVScan</title>
+  </head>
+  <body>
+    <!-- Background accents -->
+    <div class="bg"></div>
+    <div class="bg-accent"></div>
 
-  <div class="box-main-content">
-    <p class="waning-title">ACCESS BLOCKED! MALICIOUS WEBSITE DETECTED</p>
-    <p class="description-content">DEVScan has detected that this website is extremely dangerous and poses a serious threat to your security. Access has been blocked to protect you from potential harm.</p>                             
-    <p class="title-description">This malicious website could:</p>
+    <!-- Top bar -->
+    <header class="topbar" aria-label="DEVScan">
+      <div class="brand">
+        <img
+          src="../css/picture/DEVscan Logo.png"
+          alt="DEVScan"
+          class="brand-logo"
+        />
+      </div>
+    </header>
 
-    <ul class="ul-content">                                                
-      <li>Steal your passwords, bank details, and credit card information</li>
-      <li>Install harmful viruses or malware on your device</li>
-      <li>Trick you with fake login pages that look like real websites</li>
-      <li>Send spam emails from your accounts without you knowing</li>
-      <li>Access your personal files and sensitive data</li>
-    </ul>
+    <!-- Main panel -->
+    <main class="panel" role="alert" aria-live="assertive">
+      <div class="panel-head">
+        <div class="icon-circle" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 24"
+            width="28"
+            height="28"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path
+              d="M12 2l7 3v6c0 5-3.8 9.7-7 11-3.2-1.3-7-6-7-11V5l7-3zm1 6h-2v6h2V8zm0 8h-2v2h2v-2z"
+            />
+          </svg>
+        </div>
+        <h1 class="warning-title">
+          Access Blocked: Malicious Website Detected
+        </h1>
+        <p class="subtitle">
+          DEVScan detected severe, known threats on this page. To protect your
+          device and data, access has been blocked.
+        </p>
+      </div>
 
-    <p class="indicator-level">Access Blocked: MAXIMUM PROTECTION ENABLED</p>
-    
-    <div class="safety-message">
-      <p><strong>Your safety is our priority.</strong> This website has been completely blocked because it contains known malicious content. If you believe this is an error, you can disable "Block Malicious Links Completely" in the DEVScan extension settings.</p>
-    </div>
-  </div>
+      <!-- “Why blocked” -->
+      <section class="reasons">
+        <details class="reason-card" open>
+          <summary class="reason-summary">This malicious website could</summary>
+          <ul class="reason-list">
+            <li>Steal passwords, banking, and credit card details</li>
+            <li>Install harmful malware or ransomware</li>
+            <li>Impersonate trusted sites with fake login pages</li>
+            <li>Send spam or phishing from your accounts</li>
+            <li>Exfiltrate personal files and sensitive data</li>
+          </ul>
+        </details>
+      </section>
 
-  <div class="button-container">
-    <button type="button" class="safety-btn">Take Me to Safety</button>
-  </div>
+      <!-- Indicator -->
+      <p
+        class="indicator-level"
+        role="img"
+        aria-label="Maximum protection enabled"
+      >
+        Access Blocked — Maximum Protection Enabled
+      </p>
 
-  <script src="../js/warning.js"></script>
-</body>
+      <!-- Safety message -->
+      <div class="safety-message" role="note">
+        <p>
+          <strong>Your safety is our priority.</strong> This site is blocked due
+          to verified malicious content. If you believe this is an error, you
+          can disable <em>“Block Malicious Links Completely”</em> in DEVScan
+          settings — not recommended.
+        </p>
+      </div>
+
+      <!-- Actions -->
+      <div class="actions">
+        <button type="button" class="safety-btn" autofocus>
+          Take Me to Safety
+        </button>
+      </div>
+    </main>
+
+    <script src="../js/warning.js"></script>
+  </body>
 </html>

@@ -1,32 +1,61 @@
-/* Clean blue-themed popup design */
-body {
-  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  margin: 0;
-  padding: 0;
-  background: linear-gradient(135deg, #3b82f6, #1e40af);
-  color: #fff;
-  width: 320px;
-  min-height: 420px;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
+/* ===== DEVScan Popup — Cybersecurity Blue Theme ===== */
+:root {
+  --bg: #0f1115;
+  --panel: #171a22;
+  --ink: #ffffff;
+  --ink-dim: #cbd5e1;
+  --ink-muted: #9aa5b1;
+
+  --brand: #3b82f6; /* blue-500 */
+  --accent: #60a5fa; /* blue-400 */
+
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --shadow-1: 0 8px 28px rgba(0, 0, 0, 0.45);
+  --shadow-2: 0 6px 18px rgba(0, 0, 0, 0.35);
 }
 
-/* Header section with logo */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  width: 320px;
+  min-height: 420px;
+
+  font-family: "Montserrat", system-ui, -apple-system, "Segoe UI", Roboto, Arial,
+    sans-serif;
+  color: var(--ink);
+
+  background: radial-gradient(
+      400px 220px at 90% -10%,
+      rgba(59, 130, 246, 0.22),
+      transparent 60%
+    ),
+    radial-gradient(
+      340px 200px at 0% 110%,
+      rgba(96, 165, 250, 0.18),
+      transparent 60%
+    ),
+    var(--bg);
+
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+/* Header section */
 .header-card {
-  background: rgba(255, 255, 255, 0.95);
-  color: #1f2937;
-  border-radius: 16px;
-  padding: 20px;
+  background: var(--panel);
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  border-radius: var(--radius-xl);
+  padding: 16px;
   margin: 16px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
-  backdrop-filter: blur(10px);
+  box-shadow: var(--shadow-1);
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
 }
 
 .logo-img {
@@ -41,23 +70,22 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 12px;
-  padding: 16px;
-  margin: 6px 16px;
+  background: #12151b;
+  border: 1px solid rgba(96, 165, 250, 0.35);
+  border-radius: var(--radius-lg);
+  padding: 14px;
+  margin: 8px 16px;
   transition: all 0.2s ease;
-  font-size: 15px;
-  font-weight: 500;
-  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
 }
 
 .toggle-row:hover {
-  background: rgba(255, 255, 255, 0.18);
-  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(59, 130, 246, 0.08);
+  border-color: rgba(96, 165, 250, 0.55);
   transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.25);
 }
 
 .toggle-row span {
@@ -65,105 +93,91 @@ body {
   line-height: 1.4;
 }
 
+/* Cybersecurity toggle switches */
+input[type="checkbox"] {
+  width: 46px;
+  height: 24px;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(96, 165, 250, 0.35);
+  border-radius: 24px;
+  position: relative;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  flex-shrink: 0;
+}
+
+input[type="checkbox"]:hover {
+  border-color: rgba(96, 165, 250, 0.55);
+  background: rgba(96, 165, 250, 0.1);
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
+}
+
+input[type="checkbox"]:checked {
+  background: var(--brand);
+  border-color: var(--brand);
+}
+
+input[type="checkbox"]::before {
+  content: "";
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  background: #fff;
+  border-radius: 50%;
+  top: 2px;
+  left: 2px;
+  transition: all 0.25s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+input[type="checkbox"]:checked::before {
+  transform: translateX(22px);
+  background: #eff6ff;
+}
+
 /* Quote section */
 .quote {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-left: 4px solid rgba(255, 255, 255, 0.6);
-  border-radius: 12px;
-  color: rgba(255, 255, 255, 0.95);
+  background: #12151b;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius-lg);
+  color: var(--ink-dim);
   font-size: 13px;
   font-style: italic;
-  padding: 16px;
+  padding: 14px;
   margin: 16px;
   line-height: 1.5;
   text-align: center;
+  box-shadow: var(--shadow-2);
 }
 
 .quote strong {
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--accent);
   font-style: normal;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 /* Footer section */
 .footer {
-  background: rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(10px);
-  padding: 16px;
+  background: #12151b;
+  border-top: 1px solid rgba(59, 130, 246, 0.25);
+  padding: 14px;
   text-align: center;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.8);
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--ink-muted);
   margin-top: auto;
-  flex-shrink: 0;
 }
 
 .footer a {
-  color: #fff;
+  color: var(--accent);
   text-decoration: none;
   font-weight: 600;
   transition: all 0.2s ease;
 }
 
 .footer a:hover {
-  color: #dbeafe;
+  color: #93c5fd;
   text-decoration: underline;
 }
-
-/* Modern toggle switches with blue accent */
-input[type="checkbox"] {
-  width: 48px;
-  height: 26px;
-  appearance: none;
-  background: rgba(255, 255, 255, 0.2);
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-radius: 26px;
-  position: relative;
-  outline: none;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  flex-shrink: 0;
-}
-
-input[type="checkbox"]:hover {
-  border-color: rgba(255, 255, 255, 0.5);
-  background: rgba(255, 255, 255, 0.25);
-  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.1);
-}
-
-input[type="checkbox"]:checked {
-  background: rgba(255, 255, 255, 0.9);
-  border-color: rgba(255, 255, 255, 0.9);
-}
-
-input[type="checkbox"]:checked:hover {
-  background: #fff;
-  border-color: #fff;
-  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.2);
-}
-
-input[type="checkbox"]:focus-visible {
-  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.3);
-}
-
-input[type="checkbox"]::before {
-  content: "";
-  position: absolute;
-  width: 20px;
-  height: 20px;
-  background: #fff;
-  border-radius: 50%;
-  top: 1px;
-  left: 1px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-}
-
-input[type="checkbox"]:checked::before {
-  transform: translateX(22px);
-  background: #3b82f6;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
-}
-
