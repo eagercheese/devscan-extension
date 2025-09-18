@@ -1088,7 +1088,7 @@ function showScanFailedPopup() {
     .scanfailed-popup-buttons {
       display: flex;
       gap: 16px;
-      justify-content: center;
+      justify-content: space-between;
       margin-top: 22px;
       flex-wrap: wrap;
     }

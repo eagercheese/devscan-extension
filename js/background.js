@@ -1301,6 +1301,17 @@ function addSafeBypass(url) {
   safeBypassed.add(url);
   setTimeout(() => safeBypassed.delete(url), SAFE_BYPASS_TTL);
 }
+// Keep a set of tabIds that came from autocomplete
+const autoCompleteTabs = new Set();
+
+chrome.webNavigation.onCommitted.addListener((details) => {
+  if (details.transitionType === "generated") {
+    console.log("[DEVScan] Autocomplete navigation detected:", details.url);
+    autoCompleteTabs.add(details.tabId);
+    // Clear after a few seconds so we don’t block forever
+    setTimeout(() => autoCompleteTabs.delete(details.tabId), 5000);
+  }
+});
 
 async function interceptURL(url, details) {
   console.log("[DEVScan Intercepted] URL:", url);
@@ -1314,6 +1325,12 @@ async function interceptURL(url, details) {
   // If this URL is proceeded by user recently, skip scanning
   if (proceedURLS.has(resolvedUrl)) {
     console.log("[DEVScan] Skipping re-scan of safe URL:", resolvedUrl);
+    return;
+  }
+
+  // ✅ Skip autocomplete navigations (like Y8 autocomplete case)
+  if (autoCompleteTabs.has(details.tabId)) {
+    console.log("[DEVScan] Skipping autocomplete navigation for", url);
     return;
   }
 
@@ -1337,31 +1354,6 @@ async function interceptURL(url, details) {
     return;
   }
 
-  // Skip search engines + their redirects
-  const searchEngines = ["google.com", "bing.com", "yahoo.com", "duckduckgo.com", "baidu.com"];
-  try {
-    const u = new URL(resolvedUrl);
-    const initiatorHost = details.initiator ? new URL(details.initiator).hostname : "";
-
-    // Skip if destination is a search engine
-    if (searchEngines.some(engine => u.hostname.endsWith(engine))) {
-      console.log("[DEVScan] Skipping search engine page:", u.hostname);
-      return;
-    }
-
-    // Skip if navigation came *from* a search engine
-    if (initiatorHost && searchEngines.some(engine => initiatorHost.endsWith(engine))) {
-      console.log("[DEVScan] Skipping navigation from search engine:", initiatorHost);
-      return;
-    }
-  } catch (err) {
-    console.warn("[DEVScan] URL parse error, continuing:", resolvedUrl, err);
-  }
-
-  if (details.initiator === "google.com") {
-    console.log("[DEVScan] Skipping direct typed navigation:", resolvedUrl);
-  return;
-}
 
   let domain = "unknown";
   try {
@@ -1455,7 +1447,6 @@ async function interceptURL(url, details) {
   }
 
 }
-
 
 function shouldIntercept(details) {
   try {
