@@ -1337,6 +1337,32 @@ async function interceptURL(url, details) {
     return;
   }
 
+  // Skip search engines + their redirects
+  const searchEngines = ["google.com", "bing.com", "yahoo.com", "duckduckgo.com", "baidu.com"];
+  try {
+    const u = new URL(resolvedUrl);
+    const initiatorHost = details.initiator ? new URL(details.initiator).hostname : "";
+
+    // Skip if destination is a search engine
+    if (searchEngines.some(engine => u.hostname.endsWith(engine))) {
+      console.log("[DEVScan] Skipping search engine page:", u.hostname);
+      return;
+    }
+
+    // Skip if navigation came *from* a search engine
+    if (initiatorHost && searchEngines.some(engine => initiatorHost.endsWith(engine))) {
+      console.log("[DEVScan] Skipping navigation from search engine:", initiatorHost);
+      return;
+    }
+  } catch (err) {
+    console.warn("[DEVScan] URL parse error, continuing:", resolvedUrl, err);
+  }
+
+  if (details.initiator === "google.com") {
+    console.log("[DEVScan] Skipping direct typed navigation:", resolvedUrl);
+  return;
+}
+
   let domain = "unknown";
   try {
     domain = new URL(resolvedUrl).hostname;
