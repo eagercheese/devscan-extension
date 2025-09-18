@@ -1302,16 +1302,25 @@ function addSafeBypass(url) {
   setTimeout(() => safeBypassed.delete(url), SAFE_BYPASS_TTL);
 }
 // Keep a set of tabIds that came from autocomplete
+// Track autocomplete navigations
 const autoCompleteTabs = new Set();
 
 chrome.webNavigation.onCommitted.addListener((details) => {
-  if (details.transitionType === "generated") {
-    console.log("[DEVScan] Autocomplete navigation detected:", details.url);
-    autoCompleteTabs.add(details.tabId);
-    // Clear after a few seconds so we don’t block forever
-    setTimeout(() => autoCompleteTabs.delete(details.tabId), 5000);
+  const { tabId, url, transitionType } = details;
+
+  if (transitionType === "generated") {
+    // Autocomplete or search suggestion → skip scanning
+    console.log("[DEVScan] Autocomplete detected, skip once:", url);
+    autoCompleteTabs.add(tabId);
+    return;
   }
+
+  // if (autoCompleteTabs.has(tabId)) {
+  //   console.log("[DEVScan] Clearing autocomplete flag for tab", tabId, "transition:", transitionType);
+  //   autoCompleteTabs.delete(tabId);
+  // }
 });
+
 
 async function interceptURL(url, details) {
   console.log("[DEVScan Intercepted] URL:", url);
