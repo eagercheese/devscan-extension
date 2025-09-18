@@ -36,13 +36,15 @@ async function unshortenLink(shortUrl) {
     const fetchPromise = fetch(`${baseUrl}/api/unshortened-links`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: shortUrl })
+      body: JSON.stringify({ url: shortUrl }),
     });
 
     const response = await Promise.race([fetchPromise, timeoutPromise]);
 
     if (!response.ok) {
-      console.warn(`[DEVScan] Unshortener returned status ${response.status} → using original`);
+      console.warn(
+        `[DEVScan] Unshortener returned status ${response.status} → using original`
+      );
       return shortUrl;
     }
 
@@ -60,19 +62,29 @@ async function unshortenLink(shortUrl) {
 
 async function resolveShortenedUrl(url, details = {}) {
   const shortenedPatterns = [
-    'bit.ly', 't.co', 'tinyurl.com', 'goo.gl', 'is.gd', 
-    'buff.ly', 'cutt.ly', 'ow.ly', 'rebrand.ly'
+    "bit.ly",
+    "t.co",
+    "tinyurl.com",
+    "goo.gl",
+    "is.gd",
+    "buff.ly",
+    "cutt.ly",
+    "ow.ly",
+    "rebrand.ly",
   ];
-  
+
   try {
     const parsedUrl = new URL(url);
 
-    if (shortenedPatterns.includes(parsedUrl.hostname) && !details._unshortened) {
+    if (
+      shortenedPatterns.includes(parsedUrl.hostname) &&
+      !details._unshortened
+    ) {
       // For now, just return the original URL since unshortening requires server
       const resolvedUrl = await unshortenLink(url);
       console.log("[DEVScan] Resolved shortened link →", resolvedUrl);
       details._unshortened = true;
-      
+
       // Recursively resolve again in case the resolved URL is also shortened
       return resolveShortenedUrl(resolvedUrl, details);
     }
@@ -595,7 +607,10 @@ function updateLinkTooltip(url, verdict, verdictData = null) {
 
     // If we have rich verdict data, store it for tooltips
     if (verdictData && typeof verdictData === "object") {
-      console.log("[DEVScan Content] 🔧 DEBUG: Storing rich ML data from verdictData:", verdictData);
+      console.log(
+        "[DEVScan Content] 🔧 DEBUG: Storing rich ML data from verdictData:",
+        verdictData
+      );
 
       link.dataset.finalVerdict = verdict || "";
       link.dataset.confidence =
@@ -771,12 +786,9 @@ function attachClickHandler(link) {
 
 // Function to show scanning popup message
 function showScanningPopup() {
-  // Check if popup already exists to avoid duplicates
-  if (document.getElementById("devscan-scanning-popup")) {
-    return;
-  }
+  if (document.getElementById("devscan-scanning-popup")) return;
 
-  // Create popup element
+  // Create popup wrapper
   const popup = document.createElement("div");
   popup.id = "devscan-scanning-popup";
   popup.innerHTML = `
@@ -785,118 +797,132 @@ function showScanningPopup() {
         <div class="scanning-spinner"></div>
         <h3>Security Scan in Progress</h3>
       </div>
-      <p>DEVScan is currently analyzing this link for your safety. Please wait for the scan to complete before clicking the link.</p>
-      <p><strong>This helps protect you from potential security threats!</strong></p>
+      <p>DEVScan is analyzing this link for your safety. Please wait for the scan to complete before proceeding.</p>
+      <p class="popup-note"><strong>This helps protect you from potential security threats.</strong></p>
       <div class="scanning-popup-buttons">
-        <button class="scanning-popup-close">I'll Wait</button>
+        <button class="scanning-popup-close">Go Back</button>
         <button class="scanning-popup-proceed">Proceed Anyway</button>
       </div>
     </div>
   `;
 
-  // Add styles
+  // Overlay background
   popup.style.cssText = `
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.7);
+    inset: 0;
+    background: rgba(10, 15, 25, 0.85);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
     z-index: 999999;
     display: flex;
     justify-content: center;
     align-items: center;
-    font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+    font-family: 'Montserrat', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
   `;
 
-  // Add styles for popup content
+  // Cyber-blue popup style
   const style = document.createElement("style");
   style.textContent = `
     .scanning-popup-content {
-      background: white;
-      padding: 30px;
-      border-radius: 12px;
-      max-width: 450px;
-      margin: 20px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+      background: #171a22;
+      border: 1px solid rgba(96, 165, 250, 0.35);
+      border-radius: 18px;
+      padding: 32px;
+      max-width: 650px;
+      width: 90%;
+      color: #f8fafc;
+      box-shadow: 0 0 20px rgba(59, 130, 246, 0.25), 0 10px 32px rgba(0,0,0,0.6);
       text-align: center;
-      animation: scanningPopupSlide 0.3s ease-out;
+      animation: popupSlide 0.35s ease-out;
     }
+
     .scanning-popup-header {
       display: flex;
       align-items: center;
       justify-content: center;
+      gap: 14px;
       margin-bottom: 20px;
-      gap: 12px;
     }
+
     .scanning-popup-header h3 {
       margin: 0;
-      color: #2563eb;
-      font-size: 20px;
-      font-weight: 700;
+      font-size: 25px;
+      font-weight: 800;
+      color: #60a5fa;
+      text-shadow: 0 0 6px rgba(96, 165, 250, 0.4);
     }
+
     .scanning-spinner {
-      width: 24px;
-      height: 24px;
-      border: 3px solid #e5f2ff;
-      border-top: 3px solid #2563eb;
+      width: 26px;
+      height: 26px;
+      border: 3px solid rgba(96, 165, 250, 0.2);
+      border-top: 3px solid #3b82f6;
       border-radius: 50%;
-      animation: scanningSpinner 1s linear infinite;
+      animation: spin 1s linear infinite;
+      box-shadow: 0 0 8px rgba(59,130,246,0.6);
     }
+
     .scanning-popup-content p {
-      margin: 15px 0;
-      color: #333;
-      line-height: 1.5;
-      font-size: 16px;
+      margin: 14px 0;
+      font-size: 18px;
+      line-height: 1.6;
+      color: #cbd5e1;
     }
+    .popup-note {
+      color: #93c5fd;
+      font-size: 14px;
+      margin-top: 8px;
+    }
+
     .scanning-popup-buttons {
       display: flex;
-      gap: 15px;
-      justify-content: space-between;
-      margin-top: 25px;
-      padding: 0 10px;
+      gap: 14px;
+      justify-content: center;
+      margin-top: 24px;
+      flex-wrap: wrap;
     }
-    .scanning-popup-close, .scanning-popup-proceed {
-      border: none;
-      padding: 10px 20px;
-      border-radius: 6px;
-      font-size: 15px;
-      font-weight: 600;
+
+    .scanning-popup-close, 
+    .scanning-popup-proceed {
+      padding: 12px 18px;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 700;
       cursor: pointer;
-      transition: all 0.3s ease;
-      flex: 1;
-      max-width: 140px;
-      min-width: 120px;
+      transition: all 0.25s ease;
+      min-width: 140px;
     }
+
     .scanning-popup-close {
-      background: #2563eb;
-      color: white;
+      background: #3b82f6;
+      color: #fff;
+      border: none;
+      box-shadow: 0 0 10px rgba(59, 130, 246, 0.4);
     }
     .scanning-popup-close:hover {
-      background: #1d4ed8;
+      background: #2563eb;
+      box-shadow: 0 0 14px rgba(59, 130, 246, 0.6);
+      transform: translateY(-1px);
     }
+
     .scanning-popup-proceed {
-      background: #f1f5f9;
-      color: #475569;
-      border: 2px solid #cbd5e1;
+      background: transparent;
+      color: #f8fafc;
+      border: 2px solid rgba(148,187,255,0.55);
     }
     .scanning-popup-proceed:hover {
-      background: #e2e8f0;
-      border-color: #94a3b8;
+      background: rgba(96,165,250,0.1);
+      box-shadow: 0 0 12px rgba(96,165,250,0.35);
+      transform: translateY(-1px);
     }
-    @keyframes scanningSpinner {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
     }
-    @keyframes scanningPopupSlide {
-      from { 
-        opacity: 0; 
-        transform: translateY(-20px) scale(0.95); 
-      }
-      to { 
-        opacity: 1; 
-        transform: translateY(0) scale(1); 
-      }
+
+    @keyframes popupSlide {
+      from { opacity: 0; transform: translateY(-20px) scale(0.96); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
     }
   `;
 
@@ -964,19 +990,25 @@ function showScanFailedPopup() {
     return;
   }
 
-  // Create popup element
+  // Overlay + content
   const popup = document.createElement("div");
   popup.id = "devscan-scanfailed-popup";
   popup.innerHTML = `
-    <div class="scanfailed-popup-content">
+    <div class="scanfailed-popup-content" role="alertdialog" aria-labelledby="sf-title" aria-describedby="sf-desc">
       <div class="scanfailed-popup-header">
-        <div class="scanfailed-icon">⚠️</div>
-        <h3>Security Scan Failed</h3>
+        <div class="scanfailed-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+            <path d="M12 2l10 18H2L12 2zm1 13h-2v2h2v-2zm0-6h-2v5h2V9z"/>
+          </svg>
+        </div>
+        <h3 id="sf-title">Security Scan Failed</h3>
       </div>
-      <p>DEVScan was unable to analyze this link for security threats. This could be due to network issues or server unavailability.</p>
-      <p><strong>We recommend exercising caution when proceeding to unknown links.</strong></p>
+
+      <p id="sf-desc">DEVScan was unable to analyze this link (network issues or temporary server unavailability).</p>
+      <p class="sf-note"><strong>Please proceed carefully or try the scan again.</strong></p>
+
       <div class="scanfailed-popup-buttons">
-        <button class="scanfailed-popup-close">Cancel</button>
+        <button class="scanfailed-popup-close" aria-label="Close">Cancel</button>
 
         <div class="divider">
           <button class="tryagain-btn scanfailed-popup-tryagain">Try Again</button>
@@ -986,123 +1018,151 @@ function showScanFailedPopup() {
     </div>
   `;
 
-  // Add styles
+  // Overlay (blurred, dark)
   popup.style.cssText = `
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.7);
+    inset: 0;
+    background: rgba(10, 15, 25, 0.85);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
     z-index: 999999;
     display: flex;
     justify-content: center;
     align-items: center;
-    font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+    font-family: 'Montserrat', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
   `;
 
-  // Add styles for popup content
+  // Styles (dark panel + blue accent)
   const style = document.createElement("style");
   style.textContent = `
     .scanfailed-popup-content {
-      background: white;
-      padding: 30px;
-      border-radius: 12px;
-      width: min(620px, 86%);
+      background: #171a22;
+      border: 1px solid rgba(96,165,250,0.35);
+      border-radius: 18px;
+      width: min(650px, 92%);
       margin: 20px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+      padding: 30px 28px;
+      color: #e5f0ff;
       text-align: center;
-      animation: scanfailedPopupSlide 0.3s ease-out;
+      box-shadow: 0 0 20px rgba(59,130,246,0.22), 0 12px 36px rgba(0,0,0,0.6);
+      animation: sfSlide 0.35s ease-out;
     }
+
     .scanfailed-popup-header {
       display: flex;
       align-items: center;
       justify-content: center;
-      margin-bottom: 20px;
       gap: 12px;
-    }
-    .scanfailed-popup-header h3 {
-      margin: 0;
-      color: #6b7280;
-      font-size: 20px;
-      font-weight: 700;
-    }
-    .scanfailed-icon {
-      font-size: 24px;
-      animation: scanfailedPulse 2s ease-in-out infinite;
-    }
-    .scanfailed-popup-content p {
-      margin: 15px 0;
-      color: #333;
-      line-height: 1.5;
-      font-size: 16px;
-    }
-    .scanfailed-popup-buttons {
-      display: flex;
-      gap: 15px;
-      justify-content: space-between;
-      margin-top: 25px;
-      padding: 0 10px;
+      margin-bottom: 14px;
     }
 
-    .divider{
+    .scanfailed-icon {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      color: #93c5fd;
+      background: rgba(59,130,246,0.12);
+      border: 1px solid rgba(148,187,255,0.35);
+      border-radius: 999px;
+      box-shadow: 0 0 10px rgba(96,165,250,0.25);
+      animation: sfPulse 2.2s ease-in-out infinite;
+    }
+
+    .scanfailed-popup-header h3 {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 800;
+      color: #60a5fa;
+      text-shadow: 0 0 6px rgba(96,165,250,0.35);
+    }
+
+    .scanfailed-popup-content p {
+      margin: 12px 0;
+      color: #cbd5e1;
+      font-size: 18px;
+      line-height: 1.6;
+    }
+    .sf-note { color: #93c5fd; }
+
+    .scanfailed-popup-buttons {
       display: flex;
-      justify-content: center;
       gap: 16px;
+      justify-content: center;
+      margin-top: 22px;
       flex-wrap: wrap;
     }
 
-    .scanfailed-popup-close, .scanfailed-popup-proceed, .scanfailed-popup-tryagain {
-      border: none;
-      padding: 10px 20px;
-      border-radius: 6px;
-      font-size: 15px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      flex: 1;
-      max-width: 140px;
-      min-width: 120px;
+    .divider {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: center;
     }
 
+    .scanfailed-popup-close,
+    .scanfailed-popup-proceed,
+    .scanfailed-popup-tryagain {
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: transform .2s ease, box-shadow .25s ease, background-color .2s ease, border-color .2s ease;
+      min-width: 150px;
+    }
 
+    /* Neutral cancel */
     .scanfailed-popup-close {
-      background: #9ca3af;
-      color: white;
+      background: #0f141d;
+      color: #e5e7eb;
+      border: 1px solid rgba(148,163,184,0.35);
     }
     .scanfailed-popup-close:hover {
-      background: #6b7280;
+      background: #111826;
+      box-shadow: 0 0 12px rgba(148,163,184,0.25);
+      transform: translateY(-1px);
     }
 
-    .scanfailed-popup-proceed {
-      background: #4b5563;
-      color: white;
-    }
-    .scanfailed-popup-proceed:hover {
-      background: #374151;
-    }
-
+    /* Primary action = Try Again (blue) */
     .scanfailed-popup-tryagain {
-      background: #4b5563;
-      color: white;
+      background: #3b82f6;
+      color: #fff;
+      border: none;
+      box-shadow: 0 0 12px rgba(59,130,246,0.45);
     }
     .scanfailed-popup-tryagain:hover {
-      background: #374151;
+      background: #2563eb;
+      box-shadow: 0 0 16px rgba(59,130,246,0.6);
+      transform: translateY(-1px);
     }
 
-    @keyframes scanfailedPulse {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.1); }
+    /* Secondary action = Proceed (outlined) */
+    .scanfailed-popup-proceed {
+      background: transparent;
+      color: #e5f0ff;
+      border: 2px solid rgba(148,187,255,0.55);
     }
-    @keyframes scanfailedPopupSlide {
-      from { 
-        opacity: 0; 
-        transform: translateY(-20px) scale(0.95); 
-      }
-      to { 
-        opacity: 1; 
-        transform: translateY(0) scale(1); 
-      }
+    .scanfailed-popup-proceed:hover {
+      background: rgba(96,165,250,0.10);
+      box-shadow: 0 0 14px rgba(96,165,250,0.35);
+      transform: translateY(-1px);
+    }
+
+    @keyframes sfPulse {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 10px rgba(96,165,250,0.25); }
+      50% { transform: scale(1.06); box-shadow: 0 0 16px rgba(96,165,250,0.35); }
+    }
+
+    @keyframes sfSlide {
+      from { opacity: 0; transform: translateY(-18px) scale(0.96); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    @media (max-width: 520px) {
+      .scanfailed-popup-buttons,
+      .divider { flex-direction: column; }
+      .scanfailed-popup-content { padding: 26px 20px; }
     }
   `;
 
@@ -1124,51 +1184,49 @@ function showScanFailedPopup() {
   }
 
   if (tryAgainButton) {
-  tryAgainButton.addEventListener("click", async () => {
-    if (popup.parentElement) {
-      popup.remove();
-    }
-
-    const clickedLink = window.devscanCurrentClickedLink;
-    if (!clickedLink) {
-      console.error("[DEVScan Sender] ❌ No clicked link available!");
-      return;
-    }
-
-    // Get initiator from query params or fallback
-    const params = new URLSearchParams(window.location.search);
-    const initiator = params.get("initiator") || "unknown";
-
-    try {
-      const response = await new Promise((resolve, reject) => {
-        chrome.runtime.sendMessage(
-          {
-            action: "retryScan",
-            url: clickedLink.href,
-            initiator: initiator,
-          },
-          (resp) => {
-            if (chrome.runtime.lastError) {
-              reject(new Error(chrome.runtime.lastError.message));
-            } else {
-              resolve(resp);
-            }
-          }
-        );
-      });
-
-      console.log("[DEVScan Sender] ✅ Retry response:", response);
-
-      if (response?.success) {
-        console.log("[DEVScan Sender] Verdict:", response.verdict);
+    tryAgainButton.addEventListener("click", async () => {
+      if (popup.parentElement) {
+        popup.remove();
       }
-    } catch (err) {
-      console.error("[DEVScan Sender] ❌ RetryScan error:", err);
-    }
-  });
-}
 
+      const clickedLink = window.devscanCurrentClickedLink;
+      if (!clickedLink) {
+        console.error("[DEVScan Sender] ❌ No clicked link available!");
+        return;
+      }
 
+      // Get initiator from query params or fallback
+      const params = new URLSearchParams(window.location.search);
+      const initiator = params.get("initiator") || "unknown";
+
+      try {
+        const response = await new Promise((resolve, reject) => {
+          chrome.runtime.sendMessage(
+            {
+              action: "retryScan",
+              url: clickedLink.href,
+              initiator: initiator,
+            },
+            (resp) => {
+              if (chrome.runtime.lastError) {
+                reject(new Error(chrome.runtime.lastError.message));
+              } else {
+                resolve(resp);
+              }
+            }
+          );
+        });
+
+        console.log("[DEVScan Sender] ✅ Retry response:", response);
+
+        if (response?.success) {
+          console.log("[DEVScan Sender] Verdict:", response.verdict);
+        }
+      } catch (err) {
+        console.error("[DEVScan Sender] ❌ RetryScan error:", err);
+      }
+    });
+  }
 
   if (proceedButton) {
     proceedButton.addEventListener("click", () => {
@@ -1286,18 +1344,17 @@ function startDOMObserver() {
 
 // Listen for messages from background script and other extension components
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-
   if (msg.action === "showToast") {
-  // Remove old toast if still visible
-  const oldToast = document.getElementById("devscan-toast");
-  if (oldToast) oldToast.remove();
+    // Remove old toast if still visible
+    const oldToast = document.getElementById("devscan-toast");
+    if (oldToast) oldToast.remove();
 
-  // Create container
-  const toast = document.createElement("div");
-  toast.id = "devscan-toast";
+    // Create container
+    const toast = document.createElement("div");
+    toast.id = "devscan-toast";
 
-  // Use innerHTML so <h3> and <p> render properly
-  toast.innerHTML = `
+    // Use innerHTML so <h3> and <p> render properly
+    toast.innerHTML = `
     <div class="devscan-toast-content ${msg.type}">
       <div class="devscan-toast-line"></div>
       <div class="devscan-toast-icon"> 
@@ -1309,8 +1366,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     </div>
   `;
 
-  // Base positioning
-  toast.style.cssText = `
+    // Base positioning
+    toast.style.cssText = `
     position: fixed;
     top: 20px;
     left: 50%;
@@ -1319,9 +1376,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     font-family: 'Segoe UI', Roboto, Arial, sans-serif;
   `;
 
-  // Add styles for content
-  const style = document.createElement("style");
-  style.textContent = `
+    // Add styles for content
+    const style = document.createElement("style");
+    style.textContent = `
     .devscan-toast-content {
       display: flex;
       flex-direction: row;
@@ -1374,29 +1431,38 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
   `;
 
-  document.body.appendChild(style);
-  document.body.appendChild(toast);
+    document.body.appendChild(style);
+    document.body.appendChild(toast);
 
-  // Auto remove after 5s
-  setTimeout(() => toast.remove(), 5000);
-}
-
-  
-  else if (msg.action === "updateSingleLinkVerdict") {
+    // Auto remove after 5s
+    setTimeout(() => toast.remove(), 5000);
+  } else if (msg.action === "updateSingleLinkVerdict") {
     console.log("Listening from updateSingleLinkVerdict");
     // Handle individual link verdict updates for immediate feedback
     const { url, verdict, verdictData } = msg;
 
     console.log(`[DEVScan Content] 📨 Received verdict for ${url}: ${verdict}`);
     console.log(`[DEVScan Content] 🔧 DEBUG: Verdict data:`, verdictData);
-    console.log(`[DEVScan Content] 🔧 DEBUG: isValidSecurityVerdict(${verdict}):`,isValidSecurityVerdict(verdict));
+    console.log(
+      `[DEVScan Content] 🔧 DEBUG: isValidSecurityVerdict(${verdict}):`,
+      isValidSecurityVerdict(verdict)
+    );
 
-    console.log(`[DEVScan Content] Current linkVerdicts state:`,Array.from(linkVerdicts.entries()));
-    console.log(`[DEVScan Content] Current collectedLinks state:`,Array.from(collectedLinks));
+    console.log(
+      `[DEVScan Content] Current linkVerdicts state:`,
+      Array.from(linkVerdicts.entries())
+    );
+    console.log(
+      `[DEVScan Content] Current collectedLinks state:`,
+      Array.from(collectedLinks)
+    );
 
     // Validate the verdict
     if (!verdict || typeof verdict !== "string") {
-      console.error(`[DEVScan Content] Invalid verdict received for ${url}:`,verdict);
+      console.error(
+        `[DEVScan Content] Invalid verdict received for ${url}:`,
+        verdict
+      );
 
       sendResponse({ success: false, error: "Invalid verdict" });
       return true;
@@ -1405,24 +1471,36 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     // Only cache legitimate security verdicts, not failed scans
     if (isValidSecurityVerdict(verdict)) {
       linkVerdicts.set(url, verdict);
-      console.log(`[DEVScan Content] ✅ Successfully cached security verdict ${verdict} for ${url}`);
-
+      console.log(
+        `[DEVScan Content] ✅ Successfully cached security verdict ${verdict} for ${url}`
+      );
     } else {
-      console.log(`[DEVScan Content] ⚠️ Not caching failed scan result for ${url}: ${verdict}`);
+      console.log(
+        `[DEVScan Content] ⚠️ Not caching failed scan result for ${url}: ${verdict}`
+      );
       // Remove from collectedLinks to allow retry
       collectedLinks.delete(url);
     }
 
-    console.log(`[DEVScan Content] 🔧 DEBUG: linkVerdicts now contains:`,Array.from(linkVerdicts.entries()));
+    console.log(
+      `[DEVScan Content] 🔧 DEBUG: linkVerdicts now contains:`,
+      Array.from(linkVerdicts.entries())
+    );
 
     let updateSuccess = false;
     if (verdictData) {
       // Store additional verdict data for rich tooltips
       const links = document.querySelectorAll(`a[href="${url}"]`);
-      console.log(`[DEVScan Content] 🔧 DEBUG: Found ${links.length} links matching href="${url}"`);
+      console.log(
+        `[DEVScan Content] 🔧 DEBUG: Found ${links.length} links matching href="${url}"`
+      );
 
       links.forEach((link, index) => {
-        console.log(`[DEVScan Content] 🔧 DEBUG: Updating link ${index + 1} with verdict data`);
+        console.log(
+          `[DEVScan Content] 🔧 DEBUG: Updating link ${
+            index + 1
+          } with verdict data`
+        );
         link.dataset.finalVerdict = verdictData.final_verdict || "secret";
         link.dataset.confidence = verdictData.confidence_score || ""; // Fixed: use 'confidence' not 'confidenceScore'
         link.dataset.anomalyRisk = verdictData.anomaly_risk_level || "";
@@ -1432,16 +1510,28 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       });
 
       // Update tooltip with converted verdict string but pass verdictData for rich tooltip info
-      console.log(`[DEVScan Content] 🔧 DEBUG: Calling updateLinkTooltip with converted verdict: ${verdict} and verdictData for rich info`);
+      console.log(
+        `[DEVScan Content] 🔧 DEBUG: Calling updateLinkTooltip with converted verdict: ${verdict} and verdictData for rich info`
+      );
 
       updateSuccess = updateLinkTooltip(url, verdict, verdictData);
-      console.log(`[DEVScan Content] ${updateSuccess ? "✅" : "❌"} Tooltip update for ${url} with converted verdict and rich data ||  verdict: ${verdict}`);
+      console.log(
+        `[DEVScan Content] ${
+          updateSuccess ? "✅" : "❌"
+        } Tooltip update for ${url} with converted verdict and rich data ||  verdict: ${verdict}`
+      );
     } else {
       // Fallback to string verdict if no rich data
-      console.log(`[DEVScan Content] 🔧 DEBUG: Calling updateLinkTooltip with string verdict: ${verdict}`);
+      console.log(
+        `[DEVScan Content] 🔧 DEBUG: Calling updateLinkTooltip with string verdict: ${verdict}`
+      );
 
       updateSuccess = updateLinkTooltip(url, verdict);
-      console.log(`[DEVScan Content] ${updateSuccess ? "✅" : "❌"} Tooltip update for ${url} with string verdict: ${verdict}`);
+      console.log(
+        `[DEVScan Content] ${
+          updateSuccess ? "✅" : "❌"
+        } Tooltip update for ${url} with string verdict: ${verdict}`
+      );
     }
 
     console.log(`[DEVScan Content] Stored verdict ${verdict} for ${url}`);
@@ -1472,7 +1562,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   } else if (msg.action === "sessionUpdated") {
     currentSessionId = msg.sessionId;
   }
-
 });
 
 // ==============================
