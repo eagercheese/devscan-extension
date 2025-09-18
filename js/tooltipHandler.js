@@ -671,6 +671,7 @@ const iconUrls = {
         link.style.textDecoration = "underline";
         link.style.textDecorationColor = s.titleColor;
         link.style.textUnderlineOffset = "2px";
+        link.style.textDecorationThickness = "2px";
         link.style.cursor = "pointer";
       } else {
         link.style.textDecoration = "none";

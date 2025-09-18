@@ -42,7 +42,7 @@ if (safetyBtn) {
   };
 }
 
-// Legacy support for old button IDs (for existing malicious warning page)
+Legacy support for old button IDs (for existing malicious warning page)
 const legacyProceedBtn = document.getElementById("proceed-btn");
 if (legacyProceedBtn) {
   legacyProceedBtn.onclick = () => {

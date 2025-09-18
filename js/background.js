@@ -1475,10 +1475,10 @@ async function handleSingleLinkAnalysis(url, domain, providedSessionId, tabId) {
         await chrome.storage.sync.set({ currentSessionId: result.session_ID });
       }
 
-      // Add malicious URLs to intercept list for click-based blocking
-      if (verdictString === "malicious" || verdictString === "anomalous") {
-        addMaliciousUrl(url);
-      }
+      // // Add malicious URLs to intercept list for click-based blocking
+      // if (verdictString === "malicious" || verdictString === "anomalous") {
+      //   addMaliciousUrl(url);
+      // }
 
       return {
         verdict: verdictString,
@@ -1546,11 +1546,11 @@ let maliciousUrls = new Set(); // Store intercepted URLs identified as malicious
 const safeBypassed = new Set(); // Store URLs marked safe to skip re-scanning
 
 // Function to add malicious URLs to intercept list
-function addMaliciousUrl(url) {
-  maliciousUrls.add(url);
-  setTimeout(() => maliciousUrls.delete(url), 60000);
-  console.log(`[DEVScan Background] Added ${url} to malicious intercept list`);
-}
+// function addMaliciousUrl(url) {
+//   maliciousUrls.add(url);
+//   setTimeout(() => maliciousUrls.delete(url), 60000);
+//   console.log(`[DEVScan Background] Added ${url} to malicious intercept list`);
+// }
 
 // Temporary safe bypass for URLs marked safe to avoid re-scanning in short term
 const SAFE_BYPASS_TTL = 10 * 60 * 1000; // 10 minutes
@@ -1560,23 +1560,7 @@ function addSafeBypass(url) {
 }
 // Keep a set of tabIds that came from autocomplete
 // Track autocomplete navigations
-const autoCompleteTabs = new Set();
 
-chrome.webNavigation.onCommitted.addListener((details) => {
-  const { tabId, url, transitionType } = details;
-
-  if (transitionType === "generated") {
-    // Autocomplete or search suggestion → skip scanning
-    console.log("[DEVScan] Autocomplete detected, skip once:", url);
-    autoCompleteTabs.add(tabId);
-    return;
-  }
-
-  // if (autoCompleteTabs.has(tabId)) {
-  //   console.log("[DEVScan] Clearing autocomplete flag for tab", tabId, "transition:", transitionType);
-  //   autoCompleteTabs.delete(tabId);
-  // }
-});
 
 async function interceptURL(url, details) {
   console.log("[DEVScan Intercepted] URL:", url);
@@ -1596,12 +1580,6 @@ async function interceptURL(url, details) {
   // If this URL is proceeded by user recently, skip scanning
   if (proceedURLS.has(resolvedUrl)) {
     console.log("[DEVScan] Skipping re-scan of safe URL:", resolvedUrl);
-    return;
-  }
-
-  // ✅ Skip autocomplete navigations (like Y8 autocomplete case)
-  if (autoCompleteTabs.has(details.tabId)) {
-    console.log("[DEVScan] Skipping autocomplete navigation for", url);
     return;
   }
 
@@ -1779,17 +1757,14 @@ function shouldIntercept(details) {
 // );
 
 // --- ADD this instead ---
-const REAL_USER_TRANSITIONS = new Set(["link", "typed", "form_submit"]);
+const REAL_USER_TRANSITIONS = new Set(["link", "typed", "form_submit", "keyword","keyword_generated", "auto_bookmark" ]);
 
 chrome.webNavigation.onCommitted.addListener(
   async (details) => {
-    // Main frame only
     if (details.frameId !== 0) return;
 
-    // Only act on real user-initiated navigations
     if (!REAL_USER_TRANSITIONS.has(details.transitionType)) return;
 
-    // Reuse your search-engine filter (slightly adapted)
     const pseudoDetails = {
       url: details.url,
       tabId: details.tabId,
@@ -1797,17 +1772,13 @@ chrome.webNavigation.onCommitted.addListener(
     };
     if (!shouldIntercept(pseudoDetails)) return;
 
-    console.log(
-      "[DEVScan] Intercepting committed user nav →",
-      details.transitionType,
-      details.url
-    );
+    console.log("[DEVScan] Intercepting user nav →", details.transitionType, details.url);
 
-    // Hand off to your existing logic (pass a minimal details object)
     interceptURL(details.url, pseudoDetails);
   },
   { url: [{ urlMatches: ".*" }] }
 );
+
 
 // ==============================
 // DEBUG COMMANDS (Available in console)
