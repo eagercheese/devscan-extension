@@ -977,7 +977,11 @@ function showScanFailedPopup() {
       <p><strong>We recommend exercising caution when proceeding to unknown links.</strong></p>
       <div class="scanfailed-popup-buttons">
         <button class="scanfailed-popup-close">Cancel</button>
-        <button class="scanfailed-popup-proceed">Proceed with Caution</button>
+
+        <div class="divider">
+          <button class="tryagain-btn scanfailed-popup-tryagain">Try Again</button>
+          <button class="scanfailed-popup-proceed">Proceed with Caution</button>
+        </div>
       </div>
     </div>
   `;
@@ -1004,7 +1008,7 @@ function showScanFailedPopup() {
       background: white;
       padding: 30px;
       border-radius: 12px;
-      max-width: 450px;
+      width: min(620px, 86%);
       margin: 20px;
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
       text-align: center;
@@ -1040,7 +1044,15 @@ function showScanFailedPopup() {
       margin-top: 25px;
       padding: 0 10px;
     }
-    .scanfailed-popup-close, .scanfailed-popup-proceed {
+
+    .divider{
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .scanfailed-popup-close, .scanfailed-popup-proceed, .scanfailed-popup-tryagain {
       border: none;
       padding: 10px 20px;
       border-radius: 6px;
@@ -1052,6 +1064,8 @@ function showScanFailedPopup() {
       max-width: 140px;
       min-width: 120px;
     }
+
+
     .scanfailed-popup-close {
       background: #9ca3af;
       color: white;
@@ -1059,6 +1073,7 @@ function showScanFailedPopup() {
     .scanfailed-popup-close:hover {
       background: #6b7280;
     }
+
     .scanfailed-popup-proceed {
       background: #4b5563;
       color: white;
@@ -1066,6 +1081,15 @@ function showScanFailedPopup() {
     .scanfailed-popup-proceed:hover {
       background: #374151;
     }
+
+    .scanfailed-popup-tryagain {
+      background: #4b5563;
+      color: white;
+    }
+    .scanfailed-popup-tryagain:hover {
+      background: #374151;
+    }
+
     @keyframes scanfailedPulse {
       0%, 100% { transform: scale(1); }
       50% { transform: scale(1.1); }
@@ -1089,6 +1113,7 @@ function showScanFailedPopup() {
   // Add event listeners for buttons
   const closeButton = popup.querySelector(".scanfailed-popup-close");
   const proceedButton = popup.querySelector(".scanfailed-popup-proceed");
+  const tryAgainButton = popup.querySelector(".scanfailed-popup-tryagain");
 
   if (closeButton) {
     closeButton.addEventListener("click", () => {
@@ -1097,6 +1122,53 @@ function showScanFailedPopup() {
       }
     });
   }
+
+  if (tryAgainButton) {
+  tryAgainButton.addEventListener("click", async () => {
+    if (popup.parentElement) {
+      popup.remove();
+    }
+
+    const clickedLink = window.devscanCurrentClickedLink;
+    if (!clickedLink) {
+      console.error("[DEVScan Sender] ❌ No clicked link available!");
+      return;
+    }
+
+    // Get initiator from query params or fallback
+    const params = new URLSearchParams(window.location.search);
+    const initiator = params.get("initiator") || "unknown";
+
+    try {
+      const response = await new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage(
+          {
+            action: "retryScan",
+            url: clickedLink.href,
+            initiator: initiator,
+          },
+          (resp) => {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+            } else {
+              resolve(resp);
+            }
+          }
+        );
+      });
+
+      console.log("[DEVScan Sender] ✅ Retry response:", response);
+
+      if (response?.success) {
+        console.log("[DEVScan Sender] Verdict:", response.verdict);
+      }
+    } catch (err) {
+      console.error("[DEVScan Sender] ❌ RetryScan error:", err);
+    }
+  });
+}
+
+
 
   if (proceedButton) {
     proceedButton.addEventListener("click", () => {

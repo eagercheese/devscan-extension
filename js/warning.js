@@ -82,14 +82,10 @@ if (legacyBackBtn) {
 // Only run if this is the scanning page (check for unique class)
 const isScanningPage = !!document.querySelector(".popups");
 if (isScanningPage) {
-  // Show scanning page after 2s
   setTimeout(() => {
     document.body.style.display = "block";
   }, 2000);
 
-
-  // Scanning popup logic
-  // Grab intercepted URL from query param
   const params = new URLSearchParams(window.location.search);
   const interceptedUrl = params.get("url");
   const initiator = params.get("initiator");
@@ -97,84 +93,112 @@ if (isScanningPage) {
   const scanningPopupProceedBtn = document.querySelector(".scanning-popup-proceed");
   const scanningPopupBackBtn = document.querySelector(".scanning-popup-back");
 
+  const scanLinkText = document.querySelector("#scanning-popup .link-text");
+  const failLinkText = document.querySelector("#scanfailed-popup .link-text");
+
+  if (scanLinkText) scanLinkText.textContent = interceptedUrl || "this link";
+  if (failLinkText) failLinkText.textContent = interceptedUrl || "this link";
+
+  // scanning popup buttons
   if (scanningPopupProceedBtn && interceptedUrl) {
     scanningPopupProceedBtn.addEventListener("click", () => {
-      console.log("[DEVScan] User chose to proceed:", interceptedUrl);
-
-      // Tell background.js to allow bypass for this URL
       chrome.runtime.sendMessage(
         { action: "allowLinkBypass", url: interceptedUrl },
-        () => {
-          // After background acknowledges, navigate to intercepted URL
-          window.location.href = interceptedUrl;
-        }
+        () => window.location.href = interceptedUrl
       );
     });
   }
 
   if (scanningPopupBackBtn) {
     scanningPopupBackBtn.addEventListener("click", () => {
-      console.log("[DEVScan] User clicked Go Back");
-
-      if (initiator && initiator !== "none" && initiator !== "null") {
-        window.location.href = initiator; // go back to initiator
-      } else {
-        window.location.href = "https://www.google.com"; // fallback
-      }
+      window.location.href = initiator && initiator !== "none" && initiator !== "null"
+        ? initiator
+        : "https://www.google.com";
     });
   }
 
 
-  // listen for messages to show progress/UI
-  chrome.runtime.onMessage.addListener((msg) => {
+  // ✅ ONLY show scan failed when background tells us
+  chrome.runtime.onMessage.addListener((msg ,sender, sendResponse) => {
     if (msg.action === "verdictReady") {
       console.log("[DEVScan] Verdict received in ScanningPage:", msg.verdict);
       // TODO: update UI based on verdict if needed
     }
-
-    if (msg.action === "scanFailed") {
-      console.log("[DEVScan] Scan failed message received in ScanningPage:", msg);
+    else if (msg.action === "scanFailed") {
+      console.log("[DEVScan] Scan failed message received:", msg);
 
       const scanfailPopupProceedBtn = document.querySelector(".scanfailed-popup-proceed");
       const scanfailPopupBackBtn = document.querySelector(".scanfailed-popup-back");
+      const scanfailPopupTryAgainBtn = document.querySelector(".scanfailed-popup-tryagain");
 
+      const scanFailedPopup = document.querySelector("#scanfailed-popup");
+      const scanningPopup = document.querySelector("#scanning-popup");
+
+      // 🔄 toggle visibility
+      scanFailedPopup?.classList.remove("hidden");
+      scanningPopup?.classList.add("hidden");
+
+      // bind buttons
       if (scanfailPopupProceedBtn && interceptedUrl) {
-        scanfailPopupProceedBtn.addEventListener("click", () => {
-          console.log("[DEVScan] User chose to proceed:", interceptedUrl);
-
-          // Tell background.js to allow bypass for this URL
+        scanfailPopupProceedBtn.onclick = () => {
           chrome.runtime.sendMessage(
             { action: "allowLinkBypass", url: interceptedUrl },
-            () => {
-              // After background acknowledges, navigate to intercepted URL
-              window.location.href = interceptedUrl;
-            }
+            () => window.location.href = interceptedUrl
           );
-        });
+        };
       }
 
       if (scanfailPopupBackBtn) {
-        scanfailPopupBackBtn.addEventListener("click", () => {
-          console.log("[DEVScan] User clicked Go Back");
+        scanfailPopupBackBtn.onclick = () => {
+          window.location.href = initiator && initiator !== "none" && initiator !== "null"
+            ? initiator
+            : "https://www.google.com";
+        };
+      }
 
-          if (initiator && initiator !== "none" && initiator !== "null") {
-            window.location.href = initiator; // go back to initiator
-          } else {
-            window.location.href = "https://www.google.com"; // fallback
+      if (scanfailPopupTryAgainBtn) {
+        scanfailPopupTryAgainBtn.onclick = async () => {
+          const scanningText = document.querySelector(".scanning-rescanning");
+          const analyzingText = document.querySelector(".scanning-reanalyzing");
+
+          if (scanningText) scanningText.textContent = "Security Re-Scanning in Progress";
+          if (analyzingText) analyzingText.textContent = "re-analyzing";
+
+          scanFailedPopup?.classList.add("hidden");
+          scanningPopup?.classList.remove("hidden");
+
+          try {
+            const response = await new Promise((resolve, reject) => {
+              chrome.runtime.sendMessage(
+                {
+                  action: "retryScan",
+                  url: interceptedUrl,
+                  initiator: initiator,
+                },
+                (resp) => {
+                  if (chrome.runtime.lastError) {
+                    reject(new Error(chrome.runtime.lastError.message));
+                  } else {
+                    resolve(resp);
+                  }
+                }
+              );
+            });
+
+            console.log("[DEVScan Sender] ✅ Retry response:", response);
+
+            if (response?.success) {
+              console.log("[DEVScan Sender] Verdict:", response.verdict);
+            }
+          } catch (err) {
+            console.error("[DEVScan Sender] ❌ RetryScan error:", err);
           }
-          
-        });
+        };
       }
 
-      // Example: show your scan failed popup UI
-      const scanFailedPopup = document.querySelector("#scanfailed-popup");
-      const scanningPopup = document.querySelector("#scanning-popup");
-      if (scanFailedPopup) {
-        scanFailedPopup.style.display = "block";
-      }
-      if (scanningPopup) {
-        scanningPopup.style.display = "none";
-      }
+
+      sendResponse({ received: true });
+      return true;
     }
   });
 }

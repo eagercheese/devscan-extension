@@ -39,7 +39,6 @@
       <div id="scanning-popup" class="panel" role="status" aria-live="polite">
         <div class="panel-head">
           <div class="icon-circle" aria-hidden="true">
-            <!-- amber spinner icon -->
             <svg class="spinner" viewBox="0 0 50 50" aria-hidden="true">
               <circle
                 class="spinner-track"
@@ -59,9 +58,9 @@
               ></circle>
             </svg>
           </div>
-          <h1 class="title">Security Scan in Progress</h1>
+          <h1 class="title"><span class="scanning-rescanning">Security Scan in Progress</span></h1>
           <p class="subtitle">
-            DEVScan is analyzing this link for your safety. Please wait for the
+            DEVScan is <span class="scanning-reanalyzing">analyzing</span> <span class="link-text">this link</span> for your safety. Please wait for the
             scan to complete before proceeding.
           </p>
         </div>
@@ -81,7 +80,7 @@
             Proceed with Caution
           </button>
         </div>
-      </div>
+      </div> 
 
       <!-- SCAN FAILED -->
       <div
@@ -92,7 +91,7 @@
       >
         <div class="panel-head">
           <div class="icon-circle icon-error" aria-hidden="true">
-            <!-- shield-exclamation -->
+            
             <svg
               viewBox="0 0 24 24"
               width="28"
@@ -107,8 +106,8 @@
           </div>
           <h1 class="title">Security Scan Failed</h1>
           <p class="subtitle">
-            DEVScan couldn’t analyze this link (network issues or server
-            unavailability). Proceed carefully.
+            DEVScan couldn’t analyze <span class="link-text">this link</span> (network issues or server
+            unavailability). Be careful in interacting with the link.
           </p>
         </div>
 
@@ -123,11 +122,13 @@
 
         <div class="actions">
           <button class="safety-btn scanfailed-popup-back">Go Back</button>
-          <button class="proceed-btn scanfailed-popup-proceed">
-            Proceed with Caution
-          </button>
+
+          <div class="divider">
+            <button class="tryagain-btn scanfailed-popup-tryagain">Try Again</button>
+            <button class="proceed-btn scanfailed-popup-proceed">Proceed with Caution</button>
+          </div>
         </div>
-      </div>
+      </div> 
     </div>
 
     <script src="../js/warning.js"></script>

@@ -974,6 +974,104 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === "retryScan" && message.url) {
+    (async () => {
+      const retryUrl = message.url;
+      let domain = "unknown";
+
+      try {
+        domain = new URL(retryUrl).hostname;
+      } catch (err) {
+        console.warn("[DEVScan] Invalid retry URL:", retryUrl);
+      }
+
+      // Get or create session
+      const { currentSessionId: existingSession } = await chrome.storage.sync.get("currentSessionId");
+      let currentSessionId = existingSession;
+      if (!currentSessionId) {
+        console.log("[DEVScan] No session — creating one...");
+        currentSessionId = await createNewScanSession();
+      }
+
+      // Only redirect to ScanningPage if we are not already there
+      const currentTabUrl = sender.tab?.url || "";
+      const scanningPageUrl = chrome.runtime.getURL("html/ScanningPage.html");
+
+      if (!currentTabUrl.startsWith(scanningPageUrl)) {
+        chrome.tabs.update(sender.tab.id, {
+          url: chrome.runtime.getURL(
+            `html/ScanningPage.html?url=${encodeURIComponent(message.url)}&initiator=${encodeURIComponent(message.initiator || 'unknown')}`
+          )
+        });
+      } else {
+        console.log("[DEVScan] Already on ScanningPage, skipping redirect.");
+      }
+
+      let verdict = "scan_failed"; // default fallback
+      try {
+        const analysisResult = await handleSingleLinkAnalysis(retryUrl, domain, currentSessionId, sender.tab.id);
+        verdict = analysisResult?.verdict || "scan_failed";
+      } catch (err) {
+        console.error("[DEVScan] Retry analysis error:", err);
+        verdict = "scan_failed";
+      }
+
+      // Malicious / anomalous verdict
+      if (verdict === "malicious" || verdict === "anomalous") {
+        console.log("[DEVScan] Risky verdict on retry, redirecting...");
+
+        const { strictMaliciousBlocking } = await chrome.storage.sync.get("strictMaliciousBlocking");
+        const strictBlocking = strictMaliciousBlocking ?? false;
+
+        let warningPageFile;
+        if (verdict === "anomalous") {
+          warningPageFile = "html/AnomalousWarningPage.html";
+        } else if (verdict === "malicious" && strictBlocking) {
+          warningPageFile = "html/StrictWarningPage.html";
+        } else {
+          warningPageFile = "html/WarningPage.html";
+        }
+
+        chrome.tabs.update(sender.tab.id, {
+          url: chrome.runtime.getURL(
+            `${warningPageFile}?url=${encodeURIComponent(retryUrl)}&openerTabId=${sender.tab.id}&strict=${strictBlocking}&fromDevScan=true&ts=${Date.now()}`
+          )
+        });
+
+        const extractionResult = await handleExtractLinks(retryUrl);
+        console.log("[DEVScan] Link extraction result:", extractionResult);
+      }
+
+      // Scan failed again
+      else if (verdict === "scan_failed") {
+        // Notify warning.js directly
+        chrome.tabs.sendMessage(sender.tab.id, {
+          action: "scanFailed",
+          url: retryUrl,
+          reason: "The analysis service did not return a valid verdict."
+        }, (response) => {
+          if (chrome.runtime.lastError) {
+            console.error("[DEVScan] Failed to send scanFailed message:", chrome.runtime.lastError);
+          } else {
+            console.log("[DEVScan] ScanFailed message delivered to warning.js");
+          }
+        });
+      } 
+
+      // Safe verdict
+      else {
+        chrome.tabs.update(sender.tab.id, { url: retryUrl });
+        addSafeBypass(retryUrl);
+      }
+
+      sendResponse({ success: true, verdict });
+    })();
+
+    return true; // keep sendResponse alive
+  }
+});
+
 // ==============================
 // SERVER COMMUNICATION
 // ==============================
@@ -1032,7 +1130,7 @@ async function handleSingleLinkAnalysis(url, domain, providedSessionId, tabId) {
 
     // Create timeout promise that rejects after 90 seconds (increased for ML processing)
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Request timeout - analysis taking too long')), 90000);
+      setTimeout(() => reject(new Error('Request timeout - analysis taking too long')), 90000); //trial
     });
 
     // Create fetch promise with proper timeout
@@ -1261,11 +1359,11 @@ async function interceptURL(url, details) {
   console.log("[DEVScan] Navigation initiator:", initiatorValue);
   //  Redirect to scanning page immediately
   // Pass both the resolved URL and initiator to the scanning page
-  // chrome.tabs.update(details.tabId, {
-  //   url: chrome.runtime.getURL(
-  //     `html/ScanningPage.html?url=${encodeURIComponent(resolvedUrl)}&initiator=${encodeURIComponent(initiatorValue)}`
-  //   )
-  // });
+  chrome.tabs.update(details.tabId, {
+    url: chrome.runtime.getURL(
+      `html/ScanningPage.html?url=${encodeURIComponent(resolvedUrl)}&initiator=${encodeURIComponent(initiatorValue)}`
+    )
+  });
   
   let verdict = "scan_failed"; // default fallback
   try {
