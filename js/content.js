@@ -1355,81 +1355,86 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
     // Use innerHTML so <h3> and <p> render properly
     toast.innerHTML = `
-    <div class="devscan-toast-content ${msg.type}">
-      <div class="devscan-toast-line"></div>
-      <div class="devscan-toast-icon"> 
-        ${msg.type === "warning" ? "⚠️" : "✅"}
+      <div class="devscan-toast-content ${msg.type}">
+        <div class="devscan-toast-line"></div>
+        <div class="devscan-toast-icon">
+          ${msg.type === "warning" ? "⚠️" : "✅"}
+        </div>
+        <div class="devscan-toast-text">
+          ${msg.message}
+        </div>
       </div>
-      <div class="devscan-toast-text">
-        ${msg.message}
-      </div>
-    </div>
-  `;
+    `;
 
-    // Base positioning
+    // Base positioning (theme font + center top)
     toast.style.cssText = `
-    position: fixed;
-    top: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 2147483647;
-    font-family: 'Segoe UI', Roboto, Arial, sans-serif;
-  `;
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 2147483647;
+      font-family: 'Montserrat', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+    `;
 
-    // Add styles for content
+    // Add styles for content (glass + glow; amber for warning, blue for other)
     const style = document.createElement("style");
     style.textContent = `
-    .devscan-toast-content {
-      display: flex;
-      flex-direction: row;
-      align-items: center;
-    
-      padding: 8px 10px;
-      border-radius: 10px;
-      width: clamp(250px , 75vw, 500px);
+      .devscan-toast-content {
+        --accent: ${msg.type === "warning" ? "#f59e0b" : "#60a5fa"};
+        --accentSoft: ${
+          msg.type === "warning"
+            ? "rgba(245,158,11,0.40)"
+            : "rgba(96,165,250,0.40)"
+        };
 
-      background: white;
-      border: 1px solid white;
-      color: ${msg.type === "warning" ? "#856404" : "#065f46"};
-      box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 12px;
 
-      text-align: left;
-      animation: devscanToastFade 0.3s ease-out;
+        padding: 12px 16px;
+        border-radius: 14px;
+        width: clamp(260px, 80vw, 520px);
 
-      gap: 8px;
-    }
-    .devscan-toast-line {
-      align-self: stretch;   
-      width: 6px;           
-      border-radius: 6px;  
+        background: rgba(23, 26, 34, 0.88);
+        color: #e5e7eb;
+        border: 1px solid rgba(148,163,184,0.25);
+        box-shadow:
+          0 8px 24px rgba(0,0,0,0.35),
+          0 0 18px var(--accentSoft);
+        -webkit-backdrop-filter: blur(10px);
+        backdrop-filter: blur(10px);
 
-      background: ${msg.type === "warning" ? "#856404" : "#065f46"};
-    }
+        text-align: left;
+        animation: devscanToastFade 0.28s ease-out;
+      }
 
+      .devscan-toast-line {
+        align-self: stretch;
+        width: 6px;
+        border-radius: 8px;
+        background: linear-gradient(180deg, var(--accent), var(--accentSoft));
+        box-shadow: 0 0 8px var(--accentSoft);
+      }
 
-    .devscan-toast-icon {
-      font-size: 30px;
-      margin-right: 10px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
+      .devscan-toast-icon {
+        font-size: 22px;
+        margin-right: 4px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        filter: drop-shadow(0 0 6px var(--accentSoft));
+      }
 
-    .devscan-toast-content h3 {
-      margin: 0 0 2px 0;
-      font-size: 18px;
-      font-weight: 700;
-    }
-    .devscan-toast-content p {
-      margin: 0;
-      font-size: 14px;
-      line-height: 1.4;
-    }
+      .devscan-toast-text {
+        font-size: 14px;
+        line-height: 1.45;
+      }
 
-    @keyframes devscanToastFade {
-      from { opacity: 0; transform: translateY(-10px) scale(0.95); }
-      to { opacity: 1; transform: translateY(0) scale(1); }
-    }
-  `;
+      @keyframes devscanToastFade {
+        from { opacity: 0; transform: translateY(-10px) scale(0.96); }
+        to   { opacity: 1; transform: translateY(0) scale(1); }
+      }
+    `;
 
     document.body.appendChild(style);
     document.body.appendChild(toast);

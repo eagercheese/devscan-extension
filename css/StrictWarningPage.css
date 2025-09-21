@@ -117,7 +117,7 @@ body {
 
 /* Panel */
 .panel {
-  width: min(1180px, 96%);
+  width: min(1400px, 96%);
   max-height: calc(100svh - (var(--page-pad) * 2));
   background: var(--panel);
   border: 1px solid rgba(239, 68, 68, 0.55);
@@ -160,7 +160,7 @@ body {
 .subtitle {
   grid-column: 1 / -1;
   margin: 8px 0 0 0;
-  font-size: clamp(15px, 2vw, 18px);
+  font-size: clamp(15px, 2vw, 22px);
   color: #fca5a5;
   font-weight: 600;
   line-height: 1.6;
@@ -179,7 +179,7 @@ body {
 .reason-summary {
   list-style: none;
   font-weight: 800;
-  font-size: 16px;
+  font-size: 20px;
   padding-left: 26px;
   position: relative;
   cursor: default;
@@ -201,7 +201,7 @@ body {
   padding-left: 20px;
   color: var(--ink-dim);
   line-height: 1.6;
-  font-size: 15px;
+  font-size: 18px;
 }
 .reason-list li {
   margin: 6px 0;
@@ -216,7 +216,7 @@ body {
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.4px;
-  font-size: clamp(16px, 2vw, 20px);
+  font-size: clamp(16px, 2vw, 25px);
   color: #fff;
   background: linear-gradient(90deg, #b91c1c, #ef4444);
   padding: 14px 20px;
@@ -239,7 +239,7 @@ body {
   color: #fca5a5;
   font-weight: 600;
   line-height: 1.65;
-  font-size: 15px;
+  font-size: 18px;
   text-align: center;
 }
 
@@ -255,7 +255,7 @@ body {
   min-width: 260px;
   border-radius: 14px;
   font-weight: 900;
-  font-size: clamp(16px, 1.8vw, 20px);
+  font-size: clamp(16px, 1.8vw, 22px);
   padding: 14px 18px;
   cursor: pointer;
   background: #ef4444;

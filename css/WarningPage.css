@@ -119,7 +119,7 @@ body {
 
 /* Panel (matches strict layout) */
 .panel {
-  width: min(1180px, 96%);
+  width: min(1500px, 96%);
   max-height: calc(100svh - (var(--page-pad) * 2));
   background: var(--panel);
   border: 1px solid rgba(252, 165, 165, 0.5);
@@ -162,7 +162,7 @@ body {
 .subtitle {
   grid-column: 1 / -1;
   margin: 8px 0 0;
-  font-size: clamp(15px, 2vw, 18px);
+  font-size: clamp(15px, 2vw, 22px);
   color: var(--accent);
   font-weight: 600;
   line-height: 1.6;
@@ -181,7 +181,7 @@ body {
 .reason-summary {
   list-style: none;
   font-weight: 800;
-  font-size: 16px;
+  font-size: 20px;
   padding-left: 26px;
   position: relative;
   cursor: default;
@@ -206,7 +206,7 @@ body {
   padding-left: 20px;
   color: var(--ink-dim);
   line-height: 1.6;
-  font-size: 15px;
+  font-size: 18px;
 }
 .reason-list li {
   margin: 6px 0;
@@ -221,7 +221,7 @@ body {
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.4px;
-  font-size: clamp(16px, 2vw, 20px);
+  font-size: clamp(16px, 2vw, 25px);
   color: #fff;
   background: linear-gradient(90deg, #fca5a5, #f87171);
   padding: 14px 20px;
@@ -244,7 +244,7 @@ body {
   min-width: 260px;
   border-radius: 14px;
   font-weight: 900;
-  font-size: clamp(16px, 1.8vw, 20px);
+  font-size: clamp(16px, 1.8vw, 22px);
   padding: 14px 18px;
   cursor: pointer;
   transition: transform 0.15s ease, box-shadow 0.2s ease,
@@ -278,8 +278,8 @@ body {
 
 .fineprint {
   margin-top: 10px;
-  font-size: 13px;
-  color: var(--ink-muted);
+  font-size: 18px;
+  color: white;
   text-align: center;
 }
 

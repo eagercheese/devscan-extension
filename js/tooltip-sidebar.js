@@ -46,7 +46,6 @@
       color:#e5e7eb;
       transform: translateX(100%);
       transition: transform .22s cubic-bezier(.22,.7,.3,1);
-      box-shadow: -18px 0 40px rgba(0,0,0,.45), -6px 0 16px rgba(0,0,0,.35);
       display:flex; flex-direction:column;
       font-family: Inter, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
       -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;

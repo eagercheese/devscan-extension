@@ -1285,6 +1285,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === "scanBackPressed" && sender.tab?.id) {
+    console.log("[DEVScan] Back pressed in tab", sender.tab.id);
+    backPressedTabs.add(sender.tab.id);
+    setTimeout(() => backPressedTabs.delete(sender.tab.id), 10000); // expire after 10s
+  }
+});
+
 // ==============================
 // SERVER COMMUNICATION
 // ==============================
@@ -1294,29 +1302,29 @@ async function handleSingleLinkAnalysis(url, domain, providedSessionId, tabId) {
   try {
     console.log(`[DEVScan Background] 🔍 Starting analysis for: ${url}`);
 
-    // Check cache first to avoid unnecessary server requests
-    const cachedVerdict = verdictCache.get(url, providedSessionId);
-    if (cachedVerdict) {
-      console.log(
-        `[DEVScan Background] 🎯 Using cached verdict for ${url}: ${JSON.stringify(
-          cachedVerdict
-        )}`
-      );
-      let verdictAnomalyLevel = cachedVerdict.anomaly_risk_level || "N/A";
-      let verdictConfidence = cachedVerdict.confidence_score || "N/A";
+    // // Check cache first to avoid unnecessary server requests
+    // const cachedVerdict = verdictCache.get(url, providedSessionId);
+    // if (cachedVerdict) {
+    //   console.log(
+    //     `[DEVScan Background] 🎯 Using cached verdict for ${url}: ${JSON.stringify(
+    //       cachedVerdict
+    //     )}`
+    //   );
+    //   let verdictAnomalyLevel = cachedVerdict.anomaly_risk_level || "N/A";
+    //   let verdictConfidence = cachedVerdict.confidence_score || "N/A";
 
-      diagnostics.logCacheEvent(true); // Cache hit
+    //   diagnostics.logCacheEvent(true); // Cache hit
 
-      await sendVerdictWithAck(
-        tabId,
-        url,
-        cachedVerdict.verdict,
-        cachedVerdict
-      );
-      return { verdict: cachedVerdict.verdict, reason: "cached" };
-    } else {
-      diagnostics.logCacheEvent(false); // Cache miss
-    }
+    //   await sendVerdictWithAck(
+    //     tabId,
+    //     url,
+    //     cachedVerdict.verdict,
+    //     cachedVerdict
+    //   );
+    //   return { verdict: cachedVerdict.verdict, reason: "cached" };
+    // } else {
+    //   diagnostics.logCacheEvent(false); // Cache miss
+    // }
 
     // SAME-DOMAIN FILTERING: Skip analysis for same-domain links
     // if (isSameDomain(url, `https://${domain}`)) {
@@ -1544,6 +1552,7 @@ async function handleExtractLinks(maliciousUrl) {
 let proceedURLS = new Set(); // Store URLs allowed to proceed without warning
 let maliciousUrls = new Set(); // Store intercepted URLs identified as malicious
 const safeBypassed = new Set(); // Store URLs marked safe to skip re-scanning
+const backPressedTabs = new Set(); // Track tabs where user pressed Back button
 
 // Function to add malicious URLs to intercept list
 // function addMaliciousUrl(url) {
@@ -1560,7 +1569,6 @@ function addSafeBypass(url) {
 }
 // Keep a set of tabIds that came from autocomplete
 // Track autocomplete navigations
-
 
 async function interceptURL(url, details) {
   console.log("[DEVScan Intercepted] URL:", url);
@@ -1653,6 +1661,11 @@ async function interceptURL(url, details) {
 
   // Fix logic: redirect when verdict is malicious or anomalous
   if (verdict === "malicious" || verdict === "anomalous") {
+    if (backPressedTabs.has(details.tabId)) {
+      console.log("[DEVScan] Skipping WarningPage because user pressed Back");
+      backPressedTabs.delete(details.tabId); // consume flag
+      return;
+    }
     console.log("[DEVScan] Risky verdict, redirecting to warning page...");
 
     // Get user's strict blocking preference
@@ -1757,7 +1770,14 @@ function shouldIntercept(details) {
 // );
 
 // --- ADD this instead ---
-const REAL_USER_TRANSITIONS = new Set(["link", "typed", "form_submit", "keyword","keyword_generated", "auto_bookmark" ]);
+const REAL_USER_TRANSITIONS = new Set([
+  "link",
+  "typed",
+  "form_submit",
+  "keyword",
+  "keyword_generated",
+  "auto_bookmark",
+]);
 
 chrome.webNavigation.onCommitted.addListener(
   async (details) => {
@@ -1772,13 +1792,16 @@ chrome.webNavigation.onCommitted.addListener(
     };
     if (!shouldIntercept(pseudoDetails)) return;
 
-    console.log("[DEVScan] Intercepting user nav →", details.transitionType, details.url);
+    console.log(
+      "[DEVScan] Intercepting user nav →",
+      details.transitionType,
+      details.url
+    );
 
     interceptURL(details.url, pseudoDetails);
   },
   { url: [{ urlMatches: ".*" }] }
 );
-
 
 // ==============================
 // DEBUG COMMANDS (Available in console)

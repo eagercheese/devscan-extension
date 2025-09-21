@@ -141,11 +141,11 @@
   .wrap { position: fixed; inset: 0; pointer-events: none; }
   .overlay {
     position: fixed; inset: 0;
-    background: rgba(2,6,23,.45);
+    background: transparent !important;
     opacity: 0; transition: opacity .18s ease;
     pointer-events: none;
   }
-  .open .overlay { opacity: 0; pointer-events: auto; }
+  .open .overlay { opacity: 0 !important; pointer-events: auto; }
 
   /* Panel container — dark glass + soft blue glow (keeps sizing) */
   .panel {
@@ -153,9 +153,10 @@
     width: 460px; max-width: calc(100vw - 80px);
     background: linear-gradient(180deg, rgba(16,20,29,.96), rgba(16,20,29,.92));
     color: #e5e7eb;
-    transform: translateX(100%);
+    transform: translateX(calc(100% + 32px));
     transition: transform .22s cubic-bezier(.22,.7,.3,1);
-    box-shadow: -18px 0 36px rgba(0,0,0,.45);
+    box-shadow: none !important
+    will-change: transform;
     display: flex; flex-direction: column;
     font-family: Inter, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
     -webkit-font-smoothing: antialiased; moz-osx-font-smoothing: grayscale;
@@ -166,7 +167,7 @@
     max-height: 100vh;
     overflow: hidden;
   }
-  .open .panel { transform: translateX(0); pointer-events: auto; }
+  .open .panel { transform: translateX(0); pointer-events: auto; box-shadow: none; }
 
   /* Header — gradient by theme + glow */
   .head {
