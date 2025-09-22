@@ -1199,8 +1199,9 @@ function showScanFailedPopup() {
 
       // Get initiator from query params or fallback
       const params = new URLSearchParams(window.location.search);
-      const initiator = params.get("initiator") || "unknown";
+      const initiator = params.get("initiator") || window.location.href || document.referrer || "unknown";
 
+      console.log("[DEVScan Content] Retrying scan for:", clickedLink.href, "initiator:", initiator);
       try {
         const response = await new Promise((resolve, reject) => {
           chrome.runtime.sendMessage(

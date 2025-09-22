@@ -121,7 +121,7 @@ if (isScanningPage) {
         tabId: chrome.devtools?.inspectedWindow?.tabId || null
       });
 
-      window.location.href = initiator && initiator !== "none" && initiator !== "null"
+      window.location.href = initiator && initiator !== "none" && initiator !== "null" && initiator !== "unknown"
         ? initiator
         : "https://www.google.com";
     });
@@ -160,7 +160,7 @@ if (isScanningPage) {
 
       if (scanfailPopupBackBtn) {
         scanfailPopupBackBtn.onclick = () => {
-          window.location.href = initiator && initiator !== "none" && initiator !== "null"
+          window.location.href = initiator && initiator !== "none" && initiator !== "null" && initiator !== "unknown"
             ? initiator
             : "https://www.google.com";
         };

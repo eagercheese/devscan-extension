@@ -1168,8 +1168,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === "retryScan" && message.url) {
     (async () => {
       const retryUrl = message.url;
+      const initiatorValue = message.initiator || "unknown";
       let domain = "unknown";
 
+      console.log("[DEVScan] Initiator value:", initiatorValue);
       try {
         domain = new URL(retryUrl).hostname;
       } catch (err) {
@@ -1190,11 +1192,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const scanningPageUrl = chrome.runtime.getURL("html/ScanningPage.html");
 
       if (!currentTabUrl.startsWith(scanningPageUrl)) {
+        console.log("[DEVScan] Final Initiator value:", initiatorValue);
+
         chrome.tabs.update(sender.tab.id, {
           url: chrome.runtime.getURL(
             `html/ScanningPage.html?url=${encodeURIComponent(
-              message.url
-            )}&initiator=${encodeURIComponent(message.initiator || "unknown")}`
+              retryUrl
+            )}&initiator=${encodeURIComponent(initiatorValue || "unknown")}`
           ),
         });
       } else {
@@ -1212,16 +1216,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         verdict = analysisResult?.verdict || "scan_failed";
       } catch (err) {
         console.error("[DEVScan] Retry analysis error:", err);
-        verdict = "scan_failed";
       }
 
-      // Malicious / anomalous verdict
       if (verdict === "malicious" || verdict === "anomalous") {
         console.log("[DEVScan] Risky verdict on retry, redirecting...");
 
-        const { strictMaliciousBlocking } = await chrome.storage.sync.get(
-          "strictMaliciousBlocking"
-        );
+        const { strictMaliciousBlocking } =
+          await chrome.storage.sync.get("strictMaliciousBlocking");
         const strictBlocking = strictMaliciousBlocking ?? false;
 
         let warningPageFile;
@@ -1237,19 +1238,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           url: chrome.runtime.getURL(
             `${warningPageFile}?url=${encodeURIComponent(
               retryUrl
-            )}&openerTabId=${
-              sender.tab.id
-            }&strict=${strictBlocking}&fromDevScan=true&ts=${Date.now()}`
+            )}&openerTabId=${sender.tab.id}&strict=${strictBlocking}&fromDevScan=true&ts=${Date.now()}`
           ),
         });
 
         const extractionResult = await handleExtractLinks(retryUrl);
         console.log("[DEVScan] Link extraction result:", extractionResult);
-      }
-
-      // Scan failed again
-      else if (verdict === "scan_failed") {
-        // Notify warning.js directly
+      } else if (verdict === "scan_failed") {
         chrome.tabs.sendMessage(
           sender.tab.id,
           {
@@ -1264,17 +1259,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 chrome.runtime.lastError
               );
             } else {
-              console.log(
-                "[DEVScan] ScanFailed message delivered to warning.js"
-              );
+              console.log("[DEVScan] ScanFailed message delivered to warning.js");
             }
           }
         );
-      }
-
-      // Safe verdict
-      else {
-        chrome.tabs.update(sender.tab.id, { url: retryUrl });
+      } else {
+        // Safe verdict
+        if (sender.tab.url !== retryUrl) {
+          chrome.tabs.update(sender.tab.id, { url: retryUrl });
+        }
         addSafeBypass(retryUrl);
       }
 
@@ -1284,6 +1277,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // keep sendResponse alive
   }
 });
+
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === "scanBackPressed" && sender.tab?.id) {
@@ -1652,11 +1646,7 @@ async function interceptURL(url, details) {
   //  Redirect to scanning page immediately
   // Pass both the resolved URL and initiator to the scanning page
   chrome.tabs.update(details.tabId, {
-    url: chrome.runtime.getURL(
-      `html/ScanningPage.html?url=${encodeURIComponent(
-        resolvedUrl
-      )}&initiator=${encodeURIComponent(initiatorValue)}`
-    ),
+    url: chrome.runtime.getURL(`html/ScanningPage.html?url=${encodeURIComponent(resolvedUrl)}&initiator=${encodeURIComponent(initiatorValue)}`),
   });
 
   let verdict = "scan_failed"; // default fallback
