@@ -607,19 +607,15 @@ function updateLinkTooltip(url, verdict, verdictData = null) {
 
     // If we have rich verdict data, store it for tooltips
     if (verdictData && typeof verdictData === "object") {
-      console.log(
-        "[DEVScan Content] 🔧 DEBUG: Storing rich ML data from verdictData:",
-        verdictData
-      );
+      console.log("[DEVScan Content] 🔧 DEBUG: Storing rich ML data from verdictData:", verdictData);
 
       link.dataset.finalVerdict = verdict || "";
-      link.dataset.confidence =
-        verdictData.confidence_score != null
-          ? verdictData.confidence_score
-          : "";
+      link.dataset.confidence = verdictData.confidence_score != null ? verdictData.confidence_score : "";
       link.dataset.anomalyRisk = verdictData.anomaly_risk_level || "";
       link.dataset.explanation = verdictData.explanation || "";
+      link.dataset.textContent = verdictData.explanation || "";
       link.dataset.tip = verdictData.tip || "";
+      link.dataset.tipText = verdictData.tip || "";
       riskLevel = verdict; // already simplified by background
     } else if (typeof verdict === "object" && verdict !== null) {
       // Legacy fallback
@@ -629,10 +625,12 @@ function updateLinkTooltip(url, verdict, verdictData = null) {
       );
       link.dataset.finalVerdict = verdict.final_verdict || "";
       link.dataset.confidence =
-        verdict.confidence_score != null ? verdict.confidence_score : "";
-      link.dataset.anomalyRisk = verdict.anomaly_risk_level || "";
-      link.dataset.explanation = verdict.explanation || "";
-      link.dataset.tip = verdict.tip || "";
+        verdictData.confidence_score != null ? verdictData.confidence_score : "";
+      link.dataset.anomalyRisk = verdictData.anomaly_risk_level || "";
+      link.dataset.explanation = verdictData.explanation || "";
+      link.dataset.textContent = verdictData.explanation || "";
+      link.dataset.tip = verdictData.tip || "";
+      link.dataset.tipText = verdictData.tip || "";
       const rawVerdict = verdict.final_verdict || "";
       if (rawVerdict.toLowerCase().includes("scan failed"))
         riskLevel = "scan_failed";
@@ -656,7 +654,9 @@ function updateLinkTooltip(url, verdict, verdictData = null) {
       link.dataset.confidence = "";
       link.dataset.anomalyRisk = "";
       link.dataset.explanation = "";
+      link.dataset.textContent = "";
       link.dataset.tip = "";
+      link.dataset.tipText = "";
       riskLevel = verdict;
     }
 
@@ -665,7 +665,9 @@ function updateLinkTooltip(url, verdict, verdictData = null) {
       confidence: link.dataset.confidence,
       anomalyRisk: link.dataset.anomalyRisk,
       explanation: link.dataset.explanation,
+      textContent: link.dataset.textContent,
       tip: link.dataset.tip,
+      tipText: link.dataset.tipText,
     });
 
     // Always force refresh if verdict actually changed
@@ -1496,35 +1498,25 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (verdictData) {
       // Store additional verdict data for rich tooltips
       const links = document.querySelectorAll(`a[href="${url}"]`);
-      console.log(
-        `[DEVScan Content] 🔧 DEBUG: Found ${links.length} links matching href="${url}"`
-      );
+      console.log(`[DEVScan Content] 🔧 DEBUG: Found ${links.length} links matching href="${url}"`);
 
       links.forEach((link, index) => {
-        console.log(
-          `[DEVScan Content] 🔧 DEBUG: Updating link ${
-            index + 1
-          } with verdict data`
-        );
+        console.log(`[DEVScan Content] 🔧 DEBUG: Updating link ${index + 1} with verdict data`);
+
         link.dataset.finalVerdict = verdictData.final_verdict || "secret";
         link.dataset.confidence = verdictData.confidence_score || ""; // Fixed: use 'confidence' not 'confidenceScore'
         link.dataset.anomalyRisk = verdictData.anomaly_risk_level || "";
         link.dataset.explanation = verdictData.explanation || "";
-        link.dataset.tip = verdictData.tip || "";
+        link.dataset.tipText = verdictData.tip || "";
         link.dataset.riskLabel = verdict; // Store the simplified verdict too
       });
 
       // Update tooltip with converted verdict string but pass verdictData for rich tooltip info
-      console.log(
-        `[DEVScan Content] 🔧 DEBUG: Calling updateLinkTooltip with converted verdict: ${verdict} and verdictData for rich info`
-      );
+      console.log(`[DEVScan Content] 🔧 DEBUG: Calling updateLinkTooltip with converted verdict: ${verdict} and verdictData for rich info`);
 
       updateSuccess = updateLinkTooltip(url, verdict, verdictData);
-      console.log(
-        `[DEVScan Content] ${
-          updateSuccess ? "✅" : "❌"
-        } Tooltip update for ${url} with converted verdict and rich data ||  verdict: ${verdict}`
-      );
+      console.log(`[DEVScan Content] ${updateSuccess ? "✅" : "❌"} Tooltip update for ${url} with converted verdict and rich data ||  verdict: ${verdict}`);
+
     } else {
       // Fallback to string verdict if no rich data
       console.log(

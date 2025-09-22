@@ -101,6 +101,11 @@ if (isScanningPage) {
 
   // scanning popup buttons
   if (scanningPopupProceedBtn && interceptedUrl) {
+    chrome.runtime.sendMessage({
+        action: "proceedPressed",
+        tabId: chrome.devtools?.inspectedWindow?.tabId || null
+      });
+
     scanningPopupProceedBtn.addEventListener("click", () => {
       chrome.runtime.sendMessage(
         { action: "allowLinkBypass", url: interceptedUrl },
@@ -111,6 +116,11 @@ if (isScanningPage) {
 
   if (scanningPopupBackBtn) {
     scanningPopupBackBtn.addEventListener("click", () => {
+      chrome.runtime.sendMessage({
+        action: "scanBackPressed",
+        tabId: chrome.devtools?.inspectedWindow?.tabId || null
+      });
+
       window.location.href = initiator && initiator !== "none" && initiator !== "null"
         ? initiator
         : "https://www.google.com";

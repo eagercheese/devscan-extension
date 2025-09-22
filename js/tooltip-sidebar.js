@@ -279,31 +279,60 @@
     fields.conf.textContent = pct.text;
 
     // Explanation
-    if (d.description && d.description.trim()) {
-      fields.explainText.textContent = d.description;
+    // if (d.description && d.description.trim()) {
+    //   fields.explainText.textContent = d.description;
+    //   fields.explain.style.display = "block";
+    // } else {
+    //   fields.explain.style.display = "none";
+    // }
+    let explainText = d.explanation  || "";
+    if (!explainText) {
+      if (t === "safe") {
+        explainText =
+          "This website appears legitimate and safe to visit. Always verify the URL matches the intended destination.";
+      } else if (t === "anomalous") {
+        explainText =
+          "Exercise caution when visiting this link. Verify the website authenticity before providing personal information.";
+      } else if (t === "malicious") {
+        explainText =
+          "This website has been identified as potentially harmful. Avoid interacting with it.";
+      } else if (t === "scanning") {
+        explainText =
+          "We are currently analyzing this link for potential threats.";
+      } else {
+        explainText =
+          "We couldn't generate a detailed explanation for this link.";
+      }
+    }
+
+    if (explainText) {
+      fields.explainText.textContent = explainText;
       fields.explain.style.display = "block";
     } else {
       fields.explain.style.display = "none";
     }
 
     // Tip
-    let tipText = "";
-    if (t === "safe") {
-      tipText =
-        "This website appears legitimate and safe to visit. Always verify the URL matches the intended destination.";
-    } else if (t === "anomalous") {
-      tipText =
-        "Exercise caution when visiting this link. Verify the website authenticity before providing personal information.";
-    } else if (t === "malicious") {
-      tipText =
-        "Do not visit this website. It has been identified as potentially harmful and may compromise your security.";
-    } else if (t === "scanning") {
-      tipText =
-        "Please wait while we analyze this link for potential security threats.";
-    } else {
-      tipText =
-        "We couldn't verify this link's safety. Proceed with caution and verify the website manually.";
+    let tipText = d.tip || "hi";
+    if (!tipText) {
+      if (t === "safe") {
+        tipText =
+          "This website appears legitimate and safe to visit. Always verify the URL matches the intended destination.";
+      } else if (t === "anomalous") {
+        tipText =
+          "Exercise caution when visiting this link. Verify the website authenticity before providing personal information.";
+      } else if (t === "malicious") {
+        tipText =
+          "Do not visit this website. It has been identified as potentially harmful and may compromise your security.";
+      } else if (t === "scanning") {
+        tipText =
+          "Please wait while we analyze this link for potential security threats.";
+      } else {
+        tipText =
+          "We couldn't verify this link's safety. Proceed with caution and verify the website manually.";
+      }
     }
+
     if (tipText) {
       fields.tipText.textContent = tipText;
       fields.tip.style.display = "block";

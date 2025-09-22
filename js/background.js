@@ -1291,6 +1291,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     backPressedTabs.add(sender.tab.id);
     setTimeout(() => backPressedTabs.delete(sender.tab.id), 10000); // expire after 10s
   }
+
+  else if (message.action === "proceedPressed" && sender.tab?.id) {
+    console.log("[DEVScan] Proceed pressed in tab", sender.tab.id);
+    proceedPressedTabs.add(sender.tab.id);
+    setTimeout(() => proceedPressedTabs.delete(sender.tab.id), 10000); // expire after 10s
+  }
 });
 
 // ==============================
@@ -1417,6 +1423,8 @@ async function handleSingleLinkAnalysis(url, domain, providedSessionId, tabId) {
         verdictString = convertMLVerdictToString(verdict);
         verdictAnomalyLevel = verdict.anomaly_risk_level || "N/A";
         verdictConfidence = verdict.confidence_score || "N/A";
+        verdictExplanation = verdict.explanation || "N/A";
+        verdictTip = verdict.tip || "N/A";
 
         // Log detailed verdict info for debugging
         console.log(
@@ -1435,6 +1443,12 @@ async function handleSingleLinkAnalysis(url, domain, providedSessionId, tabId) {
         console.log(
           `[DEVScan Background] 🎯 Confidence_score result: "${verdict.confidence_score}"`
         );
+        console.log(
+          `[DEVScan Background] 🎯 Explanation result: "${verdict.explanation}"`
+        );
+        console.log(
+          `[DEVScan Background] 🎯 Tip result: "${verdict.tip}"`
+        );
 
         // Cache the successful verdict
         const ttl = verdictString === "malicious" ? 600000 : 300000; // 10 min for malicious, 5 min for others
@@ -1450,9 +1464,8 @@ async function handleSingleLinkAnalysis(url, domain, providedSessionId, tabId) {
         // Use enhanced delivery system with acknowledgment
         try {
           await sendVerdictWithAck(tabId, url, verdictString, verdict);
-          console.log(
-            `[DEVScan Background] ✅ Verdict delivered successfully for ${url}: ${verdictString}`
-          );
+          console.log(`[DEVScan Background] ✅ Verdict delivered successfully for ${url}: ${verdictString}`);
+          console.log(`[DEVScan Background] 🔧 DEBUG: Delivered verdict data:`, verdict);
         } catch (error) {
           console.error(
             `[DEVScan Background] ❌ Failed to deliver verdict for ${url}:`,
@@ -1553,6 +1566,7 @@ let proceedURLS = new Set(); // Store URLs allowed to proceed without warning
 let maliciousUrls = new Set(); // Store intercepted URLs identified as malicious
 const safeBypassed = new Set(); // Store URLs marked safe to skip re-scanning
 const backPressedTabs = new Set(); // Track tabs where user pressed Back button
+const proceedPressedTabs = new Set(); // Track tabs where user pressed Proceed button
 
 // Function to add malicious URLs to intercept list
 // function addMaliciousUrl(url) {
@@ -1661,11 +1675,18 @@ async function interceptURL(url, details) {
 
   // Fix logic: redirect when verdict is malicious or anomalous
   if (verdict === "malicious" || verdict === "anomalous") {
-    if (backPressedTabs.has(details.tabId)) {
+    if (backPressedTabs.has(details.tabId) ) {
       console.log("[DEVScan] Skipping WarningPage because user pressed Back");
       backPressedTabs.delete(details.tabId); // consume flag
       return;
     }
+
+    if (proceedPressedTabs.has(details.tabId) ) {
+      console.log("[DEVScan] Skipping WarningPage because user pressed Proceed");
+      proceedPressedTabs.delete(details.tabId); // consume flag
+      return;
+    }
+    
     console.log("[DEVScan] Risky verdict, redirecting to warning page...");
 
     // Get user's strict blocking preference
