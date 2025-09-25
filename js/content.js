@@ -1266,6 +1266,14 @@ function showScanFailedPopup() {
   }, 8000);
 }
 
+// Trigger banner display if function is available
+function triggerBanner() {
+  if (typeof showBanner === "function") {
+    showBanner();
+  } else {
+    console.warn("[DEVScan] showBanner() not found in banner.js");
+  }
+}
 // ==============================
 // PAGE SCANNING & EARLY DOM OBSERVATION
 // ==============================
@@ -1734,6 +1742,7 @@ const urlObserver = new MutationObserver(() => {
     // Update page tracking
     currentPageUrl = lastUrl;
     pageLoadTime = Date.now();
+    triggerBanner();
 
     // Only clear processed links if it's a different page (not just hash changes)
     const previousUrlBase = previousUrl.split("#")[0];
@@ -1751,6 +1760,10 @@ const urlObserver = new MutationObserver(() => {
   }
 });
 
+// Trigger banner on initial load
+window.addEventListener("load", () => {
+  triggerBanner();
+});
 // Monitor for URL changes in SPAs
 urlObserver.observe(document, { subtree: true, childList: true });
 
