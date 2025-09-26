@@ -607,10 +607,16 @@ function updateLinkTooltip(url, verdict, verdictData = null) {
 
     // If we have rich verdict data, store it for tooltips
     if (verdictData && typeof verdictData === "object") {
-      console.log("[DEVScan Content] 🔧 DEBUG: Storing rich ML data from verdictData:", verdictData);
+      console.log(
+        "[DEVScan Content] 🔧 DEBUG: Storing rich ML data from verdictData:",
+        verdictData
+      );
 
       link.dataset.finalVerdict = verdict || "";
-      link.dataset.confidence = verdictData.confidence_score != null ? verdictData.confidence_score : "";
+      link.dataset.confidence =
+        verdictData.confidence_score != null
+          ? verdictData.confidence_score
+          : "";
       link.dataset.anomalyRisk = verdictData.anomaly_risk_level || "";
       link.dataset.explanation = verdictData.explanation || "";
       link.dataset.textContent = verdictData.explanation || "";
@@ -625,7 +631,9 @@ function updateLinkTooltip(url, verdict, verdictData = null) {
       );
       link.dataset.finalVerdict = verdict.final_verdict || "";
       link.dataset.confidence =
-        verdictData.confidence_score != null ? verdictData.confidence_score : "";
+        verdictData.confidence_score != null
+          ? verdictData.confidence_score
+          : "";
       link.dataset.anomalyRisk = verdictData.anomaly_risk_level || "";
       link.dataset.explanation = verdictData.explanation || "";
       link.dataset.textContent = verdictData.explanation || "";
@@ -1199,9 +1207,18 @@ function showScanFailedPopup() {
 
       // Get initiator from query params or fallback
       const params = new URLSearchParams(window.location.search);
-      const initiator = params.get("initiator") || window.location.href || document.referrer || "unknown";
+      const initiator =
+        params.get("initiator") ||
+        window.location.href ||
+        document.referrer ||
+        "unknown";
 
-      console.log("[DEVScan Content] Retrying scan for:", clickedLink.href, "initiator:", initiator);
+      console.log(
+        "[DEVScan Content] Retrying scan for:",
+        clickedLink.href,
+        "initiator:",
+        initiator
+      );
       try {
         const response = await new Promise((resolve, reject) => {
           chrome.runtime.sendMessage(
@@ -1268,12 +1285,40 @@ function showScanFailedPopup() {
 
 // Trigger banner display if function is available
 function triggerBanner() {
-  if (typeof showBanner === "function") {
-    showBanner();
+  const currentDomain = window.location.hostname;
+  const storageKey = "devscan-shown-domains";
+  const expiryTime = 300000; // 5 minutes in ms
+
+  let shownDomains = JSON.parse(sessionStorage.getItem(storageKey)) || [];
+
+  // Remove expired entries
+  const now = Date.now();
+  shownDomains = shownDomains.filter(
+    (entry) => now - entry.timestamp < expiryTime
+  );
+
+  // Check if banner already shown for this domain
+  const alreadyShown = shownDomains.some(
+    (entry) => entry.domain === currentDomain
+  );
+
+  if (!alreadyShown) {
+    if (typeof showBanner === "function") {
+      showBanner();
+
+      // Save new domain with timestamp
+      shownDomains.push({ domain: currentDomain, timestamp: now });
+      sessionStorage.setItem(storageKey, JSON.stringify(shownDomains));
+    } else {
+      console.warn("[DEVScan] showBanner() not found in banner.js");
+    }
   } else {
-    console.warn("[DEVScan] showBanner() not found in banner.js");
+    console.log(
+      `[DEVScan] Banner already shown for ${currentDomain} (within time limit)`
+    );
   }
 }
+
 // ==============================
 // PAGE SCANNING & EARLY DOM OBSERVATION
 // ==============================
@@ -1507,10 +1552,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (verdictData) {
       // Store additional verdict data for rich tooltips
       const links = document.querySelectorAll(`a[href="${url}"]`);
-      console.log(`[DEVScan Content] 🔧 DEBUG: Found ${links.length} links matching href="${url}"`);
+      console.log(
+        `[DEVScan Content] 🔧 DEBUG: Found ${links.length} links matching href="${url}"`
+      );
 
       links.forEach((link, index) => {
-        console.log(`[DEVScan Content] 🔧 DEBUG: Updating link ${index + 1} with verdict data`);
+        console.log(
+          `[DEVScan Content] 🔧 DEBUG: Updating link ${
+            index + 1
+          } with verdict data`
+        );
 
         link.dataset.finalVerdict = verdictData.final_verdict || "secret";
         link.dataset.confidence = verdictData.confidence_score || ""; // Fixed: use 'confidence' not 'confidenceScore'
@@ -1521,11 +1572,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       });
 
       // Update tooltip with converted verdict string but pass verdictData for rich tooltip info
-      console.log(`[DEVScan Content] 🔧 DEBUG: Calling updateLinkTooltip with converted verdict: ${verdict} and verdictData for rich info`);
+      console.log(
+        `[DEVScan Content] 🔧 DEBUG: Calling updateLinkTooltip with converted verdict: ${verdict} and verdictData for rich info`
+      );
 
       updateSuccess = updateLinkTooltip(url, verdict, verdictData);
-      console.log(`[DEVScan Content] ${updateSuccess ? "✅" : "❌"} Tooltip update for ${url} with converted verdict and rich data ||  verdict: ${verdict}`);
-
+      console.log(
+        `[DEVScan Content] ${
+          updateSuccess ? "✅" : "❌"
+        } Tooltip update for ${url} with converted verdict and rich data ||  verdict: ${verdict}`
+      );
     } else {
       // Fallback to string verdict if no rich data
       console.log(
