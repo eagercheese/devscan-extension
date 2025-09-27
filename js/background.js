@@ -763,7 +763,8 @@ function convertMLVerdictToString(verdict) {
   if (
     finalVerdict.toLowerCase().includes("safe") ||
     finalVerdict.toLowerCase().includes("whitelisted") ||
-    finalVerdict.toLowerCase().includes("trusted")
+    finalVerdict.toLowerCase().includes("trusted") ||
+    finalVerdict.toLowerCase().includes("benign")
   ) {
     console.log(`[DEVScan Background] 🔧 DEBUG: Converted to safe`);
     return "safe";

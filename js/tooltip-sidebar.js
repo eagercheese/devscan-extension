@@ -313,7 +313,7 @@
     }
 
     // Tip
-    let tipText = d.tip || "hi";
+    let tipText = d.tip || "";
     if (!tipText) {
       if (t === "safe") {
         tipText =
